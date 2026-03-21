@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link
+      rel="icon"
+      href="https://cdn.builder.io/api/v1/image/assets%2F7dc11070cd594ebb925743307858add3%2Faf0384e0622043ecbc7f84c78ea51bb1?format=webp&width=256"
+    />
+    <link
+      rel="shortcut icon"
+      href="https://cdn.builder.io/api/v1/image/assets%2F7dc11070cd594ebb925743307858add3%2Faf0384e0622043ecbc7f84c78ea51bb1?format=webp&width=256"
+    />
+    <title>Bhushan T — Full-Stack & Flutter Developer | AI Agents</title>
+    <!-- Canonical URL for SEO -->
+    <link rel="canonical" href="https://bhushantunlait.netlify.app/" />
+
+    <!-- Meta description: ~160+ chars summarizing portfolio, skills & expertise -->
+    <meta
+      name="description"
+      content="Bhushan T — Full-Stack & Flutter Developer. Portfolio showcasing web development (WordPress, Laravel, React), Flutter mobile apps with Firebase, AI agents, and React admin panels. I build scalable, user-focused applications and intelligent automation for businesses."
+    />
+
+    <!-- Open Graph / Facebook -->
+    <meta
+      property="og:title"
+      content="Bhushan T — Full-Stack & Flutter Developer | AI Agents"
+    />
+    <meta
+      property="og:description"
+      content="Portfolio of Bhushan T: expert in web development, Flutter, Firebase, AI agents & React admin panels. View projects & connect!"
+    />
+    <meta property="og:url" content="https://bhushantunlait.netlify.app/" />
+    <meta
+      property="og:image"
+      content="https://bhushantunlait.netlify.app/favicon.svg"
+    />
+    <meta property="og:type" content="website" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary" />
+    <meta
+      name="twitter:title"
+      content="Bhushan T — Full-Stack & Flutter Developer | AI Agents"
+    />
+    <meta
+      name="twitter:description"
+      content="Portfolio of Bhushan T: expert in web development, Flutter, Firebase, AI agents & React admin panels. View projects & connect!"
+    />
+    <meta
+      name="twitter:image"
+      content="https://bhushantunlait.netlify.app/favicon.svg"
+    />
+
+    <!-- Google Analytics (replace G-XXXXXXX with your GA4 Measurement ID) -->
+    <!-- Remove or replace if you don't use Google Analytics -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXX"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+      gtag("js", new Date());
+      /* Replace 'G-XXXXXXX' with your measurement id */
+      gtag("config", "G-XXXXXXX");
+    </script>
+
+    <!-- Structured data (Schema.org) for Person, Website and Projects -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Person",
+            "name": "Bhushan T",
+            "url": "https://bhushantunlait.netlify.app/",
+            "jobTitle": "Full-Stack & Flutter Developer | AI Agents Builder",
+            "sameAs": [
+              "https://github.com/BhushanTunlait",
+              "https://www.linkedin.com/in/bhushan-tunlait-250105173/"
+            ]
+          },
+          {
+            "@type": "WebSite",
+            "url": "https://bhushantunlait.netlify.app/",
+            "name": "Bhushan T — Portfolio"
+          },
+          {
+            "@type": "ItemList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "url": "https://vibe6.com",
+                "name": "vibe6.com"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "url": "https://tirfora.com",
+                "name": "tirfora.com"
+              },
+              {
+                "@type": "ListItem",
+                "position": 3,
+                "url": "https://innovationafrica.co.za",
+                "name": "innovationafrica.co.za"
+              },
+              {
+                "@type": "ListItem",
+                "position": 4,
+                "url": "https://theforexedu.com",
+                "name": "theforexedu.com"
+              }
+            ]
+          }
+        ]
+      }
+    </script>
+  </head>
+
+  <body>
+    <div id="root">
+      <style>
+        #initial-loader {
+          position: fixed;
+          inset: 0;
+          background-color: #030014;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          z-index: 9999;
+          color: #ffffff;
+          font-family: "Inter", system-ui, sans-serif;
+        }
+
+        .spinner-container {
+          position: relative;
+          width: 60px;
+          height: 60px;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+        }
+
+        .loader-circle {
+          position: absolute;
+          width: 100%;
+          height: 100%;
+          border-radius: 50%;
+          border: 2px solid transparent;
+          border-top-color: #8b5cf6;
+          border-bottom-color: #6366f1;
+          animation: spin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+        }
+
+        .loader-circle-inner {
+          position: absolute;
+          width: 60%;
+          height: 60%;
+          border-radius: 50%;
+          border: 2px solid transparent;
+          border-left-color: #a78bfa;
+          border-right-color: #a78bfa;
+          animation: spin 0.8s cubic-bezier(0.5, 0, 0.5, 1) infinite reverse;
+        }
+
+        .loader-text {
+          margin-top: 24px;
+          font-size: 12px;
+          letter-spacing: 3px;
+          text-transform: uppercase;
+          background: linear-gradient(135deg, #667eea, #764ba2, #f093fb);
+          -webkit-background-clip: text;
+          background-clip: text;
+          color: transparent;
+          animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+
+        @keyframes pulse {
+          0%, 100% { opacity: 0.5; }
+          50% { opacity: 1; }
+        }
+      </style>
+      <div id="initial-loader">
+        <div class="spinner-container">
+          <div class="loader-circle"></div>
+          <div class="loader-circle-inner"></div>
+        </div>
+        <div class="loader-text">Loading</div>
+      </div>
+    </div>
+
+    <script type="module" src="/client/App.tsx"></script>
+  </body>
+</html>

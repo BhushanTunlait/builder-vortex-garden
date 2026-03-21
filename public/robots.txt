@@ -1,0 +1,19 @@
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: Twitterbot
+Allow: /
+
+User-agent: facebookexternalhit
+Allow: /
+
+User-agent: *
+Allow: /
+
+# Allow all crawlers and reference sitemap
+Sitemap: https://bhushantunlait.netlify.app/sitemap.xml
+# Optional: set crawl-delay for polite crawling (seconds)
+# Crawl-delay: 10

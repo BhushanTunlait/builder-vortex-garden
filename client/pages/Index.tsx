@@ -1244,94 +1244,431 @@ function AboutSection() {
    AI CHAT ASSISTANT
    ═══════════════════════════════════════════════ */
 
-function generateReply(raw: string) {
-  const q = raw.toLowerCase();
-  const has = (arr: string[]) => arr.some((k) => q.includes(k));
+/* ═══════════════════════════════════════════════
+   AI CHAT ENGINE — Smart NLP with scoring, context,
+   fuzzy matching, typewriter, quick replies
+   ═══════════════════════════════════════════════ */
 
-  if (has(["who are you", "your name", "introduce", "who r u", "about you"])) {
-    return "I'm Bhushan Tunlait, an IT graduate from Chikhli, Maharashtra. I build web platforms with WordPress, Laravel, React, and now Flutter mobile apps with Firebase, AI agents, and React admin panels.";
+type ChatReply = {
+  text: string;
+  chips?: string[];
+  topic?: string;
+};
+
+/** Knowledge base with weighted keyword matching, follow-up chips, and topic tagging */
+const KNOWLEDGE_BASE: {
+  keywords: string[];
+  synonyms?: string[];
+  reply: string | ((ctx: { hour: number; history: string[] }) => string);
+  chips?: string[];
+  topic: string;
+  weight?: number;
+}[] = [
+  // Greetings — time-aware
+  {
+    keywords: ["hello", "hi", "hey", "hola", "greetings", "sup", "yo", "howdy", "good morning", "good evening", "good afternoon", "namaste"],
+    synonyms: ["whats up", "what's up", "wassup"],
+    reply: ({ hour }) => {
+      const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+      return `${greeting}! 👋 I'm Bhushan's AI assistant. I know everything about his skills, projects, and experience. What would you like to know?`;
+    },
+    chips: ["What are his skills?", "Show me projects", "How to contact?"],
+    topic: "greeting",
+    weight: 0.5,
+  },
+  // Identity
+  {
+    keywords: ["who are you", "your name", "introduce", "who r u", "about you", "tell me about yourself", "who is bhushan", "who's bhushan"],
+    reply: "I'm the digital twin of **Bhushan Tunlait** — an IT graduate from Chikhli, Maharashtra. He builds web platforms with WordPress, Laravel & React, develops Flutter mobile apps with Firebase, creates AI agents using LLM APIs, and builds React admin panels. Think of me as his 24/7 available representative! 🤖",
+    chips: ["What's his tech stack?", "Where is he from?", "Is he available for hire?"],
+    topic: "identity",
+  },
+  // Location
+  {
+    keywords: ["where", "location", "city", "from where", "based in", "live", "country", "india", "state"],
+    synonyms: ["hometown", "place", "region"],
+    reply: "📍 Bhushan is from **Chikhli**, a town in Buldana district, **Maharashtra, India**. He works remotely and is open to collaborating with clients globally.",
+    chips: ["What's his education?", "Is he open to remote work?"],
+    topic: "location",
+  },
+  // Education
+  {
+    keywords: ["study", "education", "college", "degree", "university", "qualification", "graduate", "school"],
+    synonyms: ["academic", "studied", "learning"],
+    reply: "🎓 He studied **Information Technology** at **Anuradha Engineering College, Chikhli**. His education gave him a strong foundation in programming, databases, and system design — which he now combines with AI-powered development to ship production-ready work fast.",
+    chips: ["Where has he worked?", "What are his goals?"],
+    topic: "education",
+  },
+  // Work Experience
+  {
+    keywords: ["intern", "worked at", "work at", "job", "current role", "microspectra", "experience", "career", "company", "employer"],
+    synonyms: ["employment", "professional", "working"],
+    reply: "💼 He worked at **MicroSpectra (Shegaon)** in an IT engineering role. Beyond that, he currently works on **live trading platforms** and **corporate web systems** under NDA — that work isn't shown publicly but it shaped his focus on reliability, performance, and real business outcomes.",
+    chips: ["What's his tech stack?", "Show me his projects"],
+    topic: "experience",
+  },
+  // Goals & Vision
+  {
+    keywords: ["goal", "goals", "objective", "vision", "future", "plan", "ambition", "dream"],
+    synonyms: ["aspiration", "target", "mission"],
+    reply: "🚀 His vision: Build scalable web & mobile apps using **AI agents**, **Flutter**, **Firebase**, and modern **React** — delivering 10x faster through intelligent AI-powered workflows. He's focused on bridging the gap between AI capabilities and real-world business applications.",
+    chips: ["Tell me about AI agents", "Flutter projects?"],
+    topic: "goals",
+  },
+  // AI & Agents
+  {
+    keywords: ["ai", "prompt", "chatgpt", "artificial intelligence", "agent", "agents", "llm", "claude", "copilot", "machine learning", "gpt"],
+    synonyms: ["neural", "model", "automation"],
+    reply: "🤖 This is where it gets exciting! Bhushan builds **AI agents** using LLM APIs (ChatGPT, Claude) that automate complex workflows. He also uses **GitHub Copilot** and AI-assisted development to ship code faster. His agents can handle data processing, customer interactions, content generation, and system integrations — all connected via APIs.",
+    chips: ["What about Flutter?", "Tech stack details?", "Hire for AI project?"],
+    topic: "ai",
+    weight: 1.2,
+  },
+  // Flutter & Mobile
+  {
+    keywords: ["flutter", "mobile", "app", "dart", "android", "ios", "cross-platform", "play store", "app store"],
+    synonyms: ["smartphone", "native", "hybrid"],
+    reply: "📱 He's actively building **cross-platform mobile apps** with **Flutter & Dart**. The backend is powered by **Firebase** — Authentication, Firestore real-time database, Cloud Functions, Storage, and FCM push notifications. He's currently working on multiple Flutter projects simultaneously and loves the hot-reload development speed!",
+    chips: ["What about Firebase?", "React admin panels?", "Show projects"],
+    topic: "flutter",
+    weight: 1.2,
+  },
+  // Firebase
+  {
+    keywords: ["firebase", "firestore", "cloud functions", "fcm", "realtime database", "authentication"],
+    synonyms: ["google cloud", "serverless", "baas"],
+    reply: "🔥 Firebase is a core part of his stack:\n\n• **Firestore** — Real-time NoSQL database\n• **Firebase Auth** — Email, Google, phone auth\n• **Cloud Functions** — Serverless backend logic\n• **FCM** — Push notifications\n• **Storage** — File uploads & media\n\nHe pairs Firebase backends with React admin panels for full-stack control.",
+    chips: ["Admin panel details?", "Flutter + Firebase?"],
+    topic: "firebase",
+  },
+  // Admin Panels
+  {
+    keywords: ["admin", "panel", "dashboard", "backoffice", "cms", "management"],
+    synonyms: ["control panel", "backend ui"],
+    reply: "📊 He builds custom **React admin panels** with:\n\n• **TailwindCSS** for beautiful responsive UI\n• **Firebase integration** for real-time data sync\n• **Role-based access control** (RBAC)\n• **Analytics dashboards** with charts & KPIs\n• **User management** systems\n\nThese panels give clients full control over their data without touching code.",
+    chips: ["What's his full tech stack?", "Hire for a project?"],
+    topic: "admin",
+  },
+  // Tech Stack
+  {
+    keywords: ["skill", "stack", "tech", "technology", "tools", "framework", "language", "what can you do", "capabilities"],
+    synonyms: ["expertise", "proficiency", "know"],
+    reply: "⚡ Full tech stack:\n\n**Frontend:** React, TailwindCSS, Framer Motion\n**Mobile:** Flutter, Dart\n**Backend:** Laravel, Node.js, Firebase\n**CMS:** WordPress, WooCommerce\n**Database:** MySQL, Firestore\n**AI:** ChatGPT API, Claude API, AI Agents\n**DevOps:** Git, Netlify, Vercel\n**Design:** Figma\n\nHe uses AI-powered development (Copilot, Claude) to ship 3-5x faster than traditional methods.",
+    chips: ["Tell me about AI agents", "Show projects", "How to hire?"],
+    topic: "skills",
+  },
+  // Projects
+  {
+    keywords: ["project", "portfolio", "website", "built", "created", "made", "showcase", "examples"],
+    synonyms: ["work samples", "case study"],
+    reply: ({ history }) => {
+      const names = projects.map((p) => `• **${p.title}** — ${p.desc}`).join("\n");
+      return `🖥️ Here are his public projects:\n\n${names}\n\nScroll up to the **Selected Projects** section to see live previews! Note: His company/client work is under NDA and not shown here.`;
+    },
+    chips: ["What's his tech stack?", "How to contact?"],
+    topic: "projects",
+  },
+  // Contact
+  {
+    keywords: ["contact", "email", "linkedin", "whatsapp", "phone", "number", "call", "github", "reach", "connect"],
+    synonyms: ["get in touch", "message", "dm"],
+    reply: "📬 Here's how to reach Bhushan:\n\n• **Phone:** +91 9158856817\n• **Email:** bhushantunlait111@gmail.com\n• **LinkedIn:** linkedin.com/in/bhushan-tunlait-250105173\n• **WhatsApp:** wa.me/9158856817\n• **GitHub:** github.com/BhushanTunlait\n\nOr use the **contact form** below — it goes straight to his inbox!",
+    chips: ["Is he available for hire?", "Download resume"],
+    topic: "contact",
+  },
+  // Resume
+  {
+    keywords: ["resume", "cv", "download", "pdf"],
+    synonyms: ["curriculum", "qualifications doc"],
+    reply: "📄 You can download his resume by clicking the **Download Resume** button in the Contact section below. It has the full breakdown of skills, experience, and education.",
+    chips: ["What's his experience?", "Tech stack?"],
+    topic: "resume",
+  },
+  // Hiring / Collaboration
+  {
+    keywords: ["hire", "rate", "collaborate", "freelance", "available", "cost", "price", "budget", "engagement", "contract"],
+    synonyms: ["work together", "partner", "outsource", "consultant"],
+    reply: "✅ Yes! Bhushan is **available for new projects** and collaborations. Whether it's a web app, Flutter mobile app, AI agent, or admin panel — he's ready to discuss.\n\n**Best way to start:** Send a quick message via WhatsApp (+91 9158856817) or email (bhushantunlait111@gmail.com) with your project idea. He typically responds within a few hours!",
+    chips: ["Contact details", "What's his stack?", "Show projects"],
+    topic: "hiring",
+    weight: 1.3,
+  },
+  // WordPress / Laravel
+  {
+    keywords: ["wordpress", "woocommerce", "laravel", "php", "theme", "plugin"],
+    synonyms: ["wp", "ecommerce"],
+    reply: "🌐 Bhushan has deep experience with:\n\n• **WordPress** — Custom themes, plugins, WooCommerce stores, performance optimization, and SEO\n• **Laravel** — REST APIs, admin dashboards, complex business logic, database architecture, and secure authentication\n\nThese remain core strengths alongside his newer Flutter & AI work.",
+    chips: ["What about Flutter?", "AI capabilities?"],
+    topic: "web",
+  },
+  // React
+  {
+    keywords: ["react", "javascript", "typescript", "frontend", "ui", "tailwind", "next"],
+    synonyms: ["jsx", "tsx", "component"],
+    reply: "⚛️ React is his go-to for interactive UIs:\n\n• **React + TypeScript** for type-safe components\n• **TailwindCSS** for rapid styling\n• **Framer Motion** for animations\n• **Firebase & REST API** integration\n• **Admin panels** with real-time data\n\nThis very portfolio you're looking at is built with React! 😉",
+    chips: ["Admin panel details?", "Full tech stack?"],
+    topic: "react",
+  },
+  // Thanks / Bye
+  {
+    keywords: ["thank", "thanks", "bye", "goodbye", "see you", "take care", "appreciate", "helpful"],
+    synonyms: ["cheers", "ta", "cya"],
+    reply: ({ hour }) => {
+      const closing = hour < 17 ? "Have a great day" : "Have a great evening";
+      return `You're welcome! 😊 ${closing}! If you need anything else, I'm always here. Don't forget to check out the **Contact section** below if you'd like to work with Bhushan. 🚀`;
+    },
+    chips: ["Contact details", "Download resume"],
+    topic: "farewell",
+    weight: 0.5,
+  },
+  // How are you / Fun
+  {
+    keywords: ["how are you", "how r u", "what's good", "having fun", "are you real"],
+    reply: "I'm just code, but I'm running at peak performance today! 😄 I'm here to help you learn about Bhushan — ask me anything about his work, skills, or how to collaborate with him.",
+    chips: ["Who is Bhushan?", "What can he do?"],
+    topic: "fun",
+    weight: 0.3,
+  },
+];
+
+/** Score-based intent matcher with fuzzy matching */
+function matchIntent(input: string, history: string[]): ChatReply {
+  const q = input.toLowerCase().replace(/[^\w\s]/g, "").trim();
+  const words = q.split(/\s+/);
+  const hour = new Date().getHours();
+
+  // Handle very short / empty input
+  if (words.length === 0 || q.length < 2) {
+    return {
+      text: "I didn't quite catch that. Try asking about Bhushan's **skills**, **projects**, **experience**, or **contact** info!",
+      chips: ["What are his skills?", "Show projects", "Contact details"],
+      topic: "fallback",
+    };
   }
-  if (has(["where are you from", "location", "city", "from where", "based in", "where do you live"])) {
-    return "I'm from Chikhli, a town in Buldana district, Maharashtra, India.";
+
+  // Handle follow-ups: "tell me more", "more details", "elaborate"
+  if (/^(tell me more|more|elaborate|details|explain|go on|continue)/.test(q) && history.length > 0) {
+    const lastTopic = history[history.length - 1];
+    const entry = KNOWLEDGE_BASE.find((e) => e.topic === lastTopic);
+    if (entry) {
+      const text = typeof entry.reply === "function"
+        ? entry.reply({ hour, history })
+        : entry.reply;
+      return {
+        text: `Here's more detail on that:\n\n${text}`,
+        chips: entry.chips,
+        topic: entry.topic,
+      };
+    }
   }
-  if (has(["study", "education", "college", "degree"])) {
-    return "I studied Information Technology at Anuradha Engineering College, Chikhli.";
+
+  // Score each knowledge entry
+  let bestScore = 0;
+  let bestEntry = KNOWLEDGE_BASE[KNOWLEDGE_BASE.length - 1]; // default to fun/fallback
+
+  for (const entry of KNOWLEDGE_BASE) {
+    let score = 0;
+    const allKeywords = [...entry.keywords, ...(entry.synonyms || [])];
+
+    for (const kw of allKeywords) {
+      // Exact substring match
+      if (q.includes(kw)) {
+        score += kw.split(/\s+/).length * 2; // multi-word matches score higher
+      }
+      // Individual word match
+      for (const word of words) {
+        if (kw.includes(word) && word.length >= 3) score += 0.8;
+        // Fuzzy: first 4 chars match (handles typos like "fluter" -> "flutter")
+        if (word.length >= 4 && kw.length >= 4 && kw.startsWith(word.slice(0, 4))) score += 0.6;
+      }
+    }
+
+    score *= entry.weight ?? 1;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestEntry = entry;
+    }
   }
-  if (has(["intern", "worked at", "work at", "job", "current role", "microspectra"])) {
-    return "I worked at MicroSpectra (Shegaon) in an IT engineering role.";
+
+  // If score is too low, return smart fallback
+  if (bestScore < 1) {
+    return {
+      text: `Hmm, I'm not sure about that one! I'm best at answering questions about Bhushan's **skills**, **projects**, **experience**, **education**, **contact info**, or **availability**.\n\nTry one of the suggestions below 👇`,
+      chips: ["Who is Bhushan?", "What's his tech stack?", "How to hire him?", "Contact details"],
+      topic: "fallback",
+    };
   }
-  if (has(["goal", "goals", "objective", "vision"])) {
-    return "My goal is to build scalable web and mobile apps using AI agents, Flutter, Firebase, and modern React — delivering real business value faster through smart AI-powered workflows.";
-  }
-  if (has(["ai", "prompt", "chatgpt", "artificial intelligence", "agent", "agents", "llm"])) {
-    return "I build AI agents using LLM APIs (ChatGPT, Claude) and use AI-powered development with tools like GitHub Copilot. I create intelligent workflows that automate tasks and integrate with existing systems.";
-  }
-  if (has(["flutter", "mobile", "app", "dart"])) {
-    return "I'm now building cross-platform mobile apps with Flutter & Dart, using Firebase for backend — auth, Firestore, cloud functions, and push notifications. Currently working on multiple Flutter projects.";
-  }
-  if (has(["firebase", "database"])) {
-    return "I use Firebase extensively — Firestore for real-time data, Firebase Auth, Cloud Functions, Storage, and FCM. I also build React admin panels to manage Firebase data.";
-  }
-  if (has(["admin", "panel", "dashboard"])) {
-    return "I build React-based admin panels with TailwindCSS and Firebase — real-time data, role-based access, analytics dashboards, and user management.";
-  }
-  if (has(["skill", "stack", "tech", "technology"])) {
-    return "Core skills: WordPress, Laravel, React, Flutter/Dart, Firebase, AI agents/LLMs, REST APIs, React admin panels, TailwindCSS, and AI-powered development workflows.";
-  }
-  if (has(["project", "work", "portfolio"])) {
-    const names = projects.map((p) => p.title).join(", ");
-    return `Recent projects: ${names}. Check the 'Selected Projects' section for details.`;
-  }
-  if (has(["contact", "email", "linkedin", "whatsapp", "phone", "mobile", "github"])) {
-    return "Contact: Phone +91 9158856817, Email bhushantunlait111@gmail.com, LinkedIn linkedin.com/in/bhushan-tunlait-250105173, WhatsApp wa.me/9158856817, GitHub github.com/BhushanTunlait";
-  }
-  if (has(["resume", "cv"])) {
-    return "You can download my resume using the 'Download Resume' button in the Contact section.";
-  }
-  if (has(["hire", "rate", "collaborate", "freelance"])) {
-    return "I'm available for collaborations! Share your requirements via email or WhatsApp and I'll get back to you quickly.";
-  }
-  return "You can ask about my background, skills, AI development approach, projects, contact, or goals.";
+
+  const text = typeof bestEntry.reply === "function"
+    ? bestEntry.reply({ hour, history })
+    : bestEntry.reply;
+
+  return {
+    text,
+    chips: bestEntry.chips,
+    topic: bestEntry.topic,
+  };
 }
+
+/* ═══════════════════════════════════════════════
+   CHAT MESSAGE TYPES
+   ═══════════════════════════════════════════════ */
+
+type ChatMessage = {
+  from: "bot" | "user";
+  text: string;
+  chips?: string[];
+  typing?: boolean; // true while typewriter is in progress
+};
+
+/** Typewriter component — reveals text character by character */
+function TypewriterText({
+  text,
+  speed = 12,
+  onDone,
+}: {
+  text: string;
+  speed?: number;
+  onDone?: () => void;
+}) {
+  const [displayedChars, setDisplayedChars] = useState(0);
+  const doneRef = useRef(false);
+
+  useEffect(() => {
+    setDisplayedChars(0);
+    doneRef.current = false;
+    let i = 0;
+    const interval = setInterval(() => {
+      i++;
+      setDisplayedChars(i);
+      if (i >= text.length) {
+        clearInterval(interval);
+        if (!doneRef.current) {
+          doneRef.current = true;
+          onDone?.();
+        }
+      }
+    }, speed);
+    return () => clearInterval(interval);
+  }, [text, speed, onDone]);
+
+  const shown = text.slice(0, displayedChars);
+
+  // Simple markdown-like rendering: **bold** and \n for line breaks, • for bullets
+  const parts = shown.split("\n").map((line, li) => (
+    <span key={li}>
+      {li > 0 && <br />}
+      {line.split(/(\*\*[^*]+\*\*)/).map((seg, si) =>
+        seg.startsWith("**") && seg.endsWith("**") ? (
+          <strong key={si} className="text-white font-semibold">
+            {seg.slice(2, -2)}
+          </strong>
+        ) : (
+          <span key={si}>{seg}</span>
+        )
+      )}
+    </span>
+  ));
+
+  return <>{parts}{displayedChars < text.length && <span className="inline-block w-0.5 h-4 bg-purple-400 ml-0.5 animate-pulse align-middle" />}</>;
+}
+
+/** Render a completed (non-typing) bot message with markdown */
+function RichText({ text }: { text: string }) {
+  return (
+    <>
+      {text.split("\n").map((line, li) => (
+        <span key={li}>
+          {li > 0 && <br />}
+          {line.split(/(\*\*[^*]+\*\*)/).map((seg, si) =>
+            seg.startsWith("**") && seg.endsWith("**") ? (
+              <strong key={si} className="text-white font-semibold">
+                {seg.slice(2, -2)}
+              </strong>
+            ) : (
+              <span key={si}>{seg}</span>
+            )
+          )}
+        </span>
+      ))}
+    </>
+  );
+}
+
+/* ═══════════════════════════════════════════════
+   CHAT SECTION COMPONENT
+   ═══════════════════════════════════════════════ */
 
 function ChatSection() {
   const ref = useRef<HTMLElement>(null);
   const inView = useInView(ref, { once: true, margin: "-100px" });
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
-  const [chatMessages, setChatMessages] = useState<{ from: "bot" | "user"; text: string }[]>([
-    { from: "bot", text: "Hey! I'm Bhushan's AI assistant. Ask me anything about his skills, projects, experience, or availability." },
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
+    {
+      from: "bot",
+      text: `${new Date().getHours() < 12 ? "Good morning" : new Date().getHours() < 17 ? "Good afternoon" : "Good evening"}! 👋 I'm Bhushan's AI assistant. I can tell you about his **skills**, **projects**, **experience**, or help you **get in touch**. What would you like to know?`,
+      chips: ["Who is Bhushan?", "Tech stack", "Show projects", "Contact details"],
+    },
   ]);
+  const topicHistory = useRef<string[]>([]);
   const chatBoxRef = useRef<HTMLDivElement | null>(null);
-  const chatTimeoutRef = useRef<number | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [messageCount, setMessageCount] = useState(0);
 
+  // Auto-scroll on new messages and during typing
   useEffect(() => {
     if (chatBoxRef.current) {
       chatBoxRef.current.scrollTo({ top: chatBoxRef.current.scrollHeight, behavior: "smooth" });
     }
-  }, [chatMessages.length]);
+  }, [chatMessages, messageCount]);
 
-  const handleChatSubmit = useCallback(() => {
-    const text = chatInput.trim();
-    if (!text || chatLoading) return;
-    setChatMessages((prev) => [...prev, { from: "user", text }]);
-    setChatInput("");
-    setChatLoading(true);
+  const processMessage = useCallback(
+    (text: string) => {
+      if (!text.trim() || chatLoading) return;
 
-    const id = window.setTimeout(() => {
-      const reply = generateReply(text);
-      setChatMessages((prev) => [...prev, { from: "bot", text: reply }]);
-      setChatLoading(false);
-      chatTimeoutRef.current = null;
-    }, 500);
-    chatTimeoutRef.current = id;
-  }, [chatInput, chatLoading]);
+      // Add user message
+      setChatMessages((prev) => [...prev, { from: "user", text: text.trim() }]);
+      setChatInput("");
+      setChatLoading(true);
 
-  useEffect(() => {
-    return () => {
-      if (chatTimeoutRef.current) clearTimeout(chatTimeoutRef.current);
-    };
+      // Simulate "thinking" delay (300-800ms based on input length)
+      const thinkTime = Math.min(300 + text.length * 15, 800);
+
+      setTimeout(() => {
+        const reply = matchIntent(text, topicHistory.current);
+        if (reply.topic) topicHistory.current.push(reply.topic);
+
+        // Add bot message with typing flag
+        setChatMessages((prev) => [
+          ...prev,
+          { from: "bot", text: reply.text, chips: reply.chips, typing: true },
+        ]);
+        setChatLoading(false);
+      }, thinkTime);
+    },
+    [chatLoading],
+  );
+
+  const handleTypingDone = useCallback((msgIndex: number) => {
+    setChatMessages((prev) =>
+      prev.map((m, i) => (i === msgIndex ? { ...m, typing: false } : m)),
+    );
+    setMessageCount((c) => c + 1);
   }, []);
+
+  const handleChipClick = useCallback(
+    (chip: string) => {
+      processMessage(chip);
+    },
+    [processMessage],
+  );
+
+  // Focus input after bot finishes typing
+  useEffect(() => {
+    if (!chatLoading) inputRef.current?.focus();
+  }, [chatLoading, messageCount]);
 
   return (
     <section id="assistant" ref={ref} className="py-16 md:py-28 section-dark relative overflow-hidden">
@@ -1341,7 +1678,7 @@ function ChatSection() {
         initial="hidden"
         animate={inView ? "visible" : "hidden"}
         variants={stagger}
-        className="mx-auto max-w-[1200px] px-6 relative z-10"
+        className="mx-auto max-w-[1200px] px-5 sm:px-6 relative z-10"
       >
         <div className="grid lg:grid-cols-[1fr_1.3fr] gap-8 md:gap-12 items-center">
           <div className="space-y-6">
@@ -1350,10 +1687,20 @@ function ChatSection() {
               Ask My <span className="gradient-text">Digital Twin.</span>
             </SectionTitle>
             <motion.p variants={fadeUp} className="text-slate-400 text-[15px] leading-relaxed">
-              Trained on my resume, skills, and experience. Get instant answers
-              about my background, tech stack, availability, or request contact
-              details.
+              Powered by a smart NLP engine trained on Bhushan's complete
+              profile. Ask naturally — it understands context, handles
+              follow-ups, and even corrects typos.
             </motion.p>
+            <motion.div variants={fadeUp} className="hidden lg:flex flex-wrap gap-2">
+              {["Skills", "Projects", "Experience", "Contact", "Flutter", "AI Agents"].map((t) => (
+                <span
+                  key={t}
+                  className="px-3 py-1 text-xs font-medium rounded-full border border-purple-500/20 bg-purple-500/5 text-purple-300/70"
+                >
+                  {t}
+                </span>
+              ))}
+            </motion.div>
           </div>
 
           <motion.div
@@ -1361,77 +1708,141 @@ function ChatSection() {
             className="glass-strong rounded-2xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.3)]"
           >
             {/* Chat Header */}
-            <div className="p-5 flex items-center gap-4 border-b border-white/5 bg-white/[0.02]">
-              <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-purple-600 to-indigo-600 grid place-items-center text-white shadow-lg">
-                <Bot className="h-5 w-5" />
+            <div className="p-4 sm:p-5 flex items-center gap-3 sm:gap-4 border-b border-white/5 bg-white/[0.02]">
+              <div className="relative">
+                <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-xl bg-gradient-to-br from-purple-600 to-indigo-600 grid place-items-center text-white shadow-lg">
+                  <Bot className="h-5 w-5" />
+                </div>
+                <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-green-400 border-2 border-[#0d0d1a]" />
               </div>
-              <div>
-                <h4 className="font-display font-bold text-white text-[15px]">
+              <div className="flex-1">
+                <h4 className="font-display font-bold text-white text-sm sm:text-[15px]">
                   Bhushan's AI Agent
                 </h4>
                 <p className="text-xs text-slate-500 flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-green-400" /> Online
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-400" />
+                  </span>
+                  Always online
                 </p>
+              </div>
+              <div className="text-xs text-slate-600 font-mono hidden sm:block">
+                NLP v2.0
               </div>
             </div>
 
             {/* Chat Messages */}
-            <div className="p-5 flex flex-col h-[380px]">
+            <div className="p-4 sm:p-5 flex flex-col h-[420px] sm:h-[440px]">
               <div
                 ref={chatBoxRef}
-                className="flex-1 overflow-y-auto pr-2 space-y-4 scrollbar-thin scrollbar-thumb-white/10"
+                className="flex-1 overflow-y-auto pr-1 sm:pr-2 space-y-4 scrollbar-thin scrollbar-thumb-white/10"
               >
                 {chatMessages.map((m, i) => (
-                  <div
-                    key={i}
-                    className={m.from === "bot" ? "flex items-start gap-3" : "flex items-start gap-3 justify-end"}
-                  >
-                    {m.from === "bot" && (
-                      <div className="h-8 w-8 shrink-0 rounded-lg bg-purple-600/20 text-purple-300 grid place-items-center">
-                        <BotMessageSquare className="h-4 w-4" />
-                      </div>
-                    )}
-                    <div
-                      className={cn(
-                        "text-sm leading-relaxed p-3.5 rounded-xl max-w-[85%]",
+                  <div key={i}>
+                    <motion.div
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3 }}
+                      className={
                         m.from === "bot"
-                          ? "bg-white/5 text-slate-300 rounded-tl-sm border border-white/5"
-                          : "bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-tr-sm"
-                      )}
+                          ? "flex items-start gap-2.5"
+                          : "flex items-start gap-2.5 justify-end"
+                      }
                     >
-                      {m.text}
-                    </div>
+                      {m.from === "bot" && (
+                        <div className="h-7 w-7 sm:h-8 sm:w-8 shrink-0 rounded-lg bg-purple-600/20 text-purple-300 grid place-items-center mt-0.5">
+                          <BotMessageSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                        </div>
+                      )}
+                      <div
+                        className={cn(
+                          "text-[13px] sm:text-sm leading-relaxed p-3 sm:p-3.5 rounded-xl max-w-[88%]",
+                          m.from === "bot"
+                            ? "bg-white/5 text-slate-300 rounded-tl-sm border border-white/5"
+                            : "bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-tr-sm",
+                        )}
+                      >
+                        {m.from === "bot" && m.typing ? (
+                          <TypewriterText
+                            text={m.text}
+                            speed={10}
+                            onDone={() => handleTypingDone(i)}
+                          />
+                        ) : m.from === "bot" ? (
+                          <RichText text={m.text} />
+                        ) : (
+                          m.text
+                        )}
+                      </div>
+                    </motion.div>
+
+                    {/* Quick Reply Chips — show after bot finishes typing */}
+                    {m.from === "bot" &&
+                      !m.typing &&
+                      m.chips &&
+                      i === chatMessages.length - 1 && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.4, delay: 0.1 }}
+                          className="flex flex-wrap gap-1.5 mt-2.5 ml-9 sm:ml-10"
+                        >
+                          {m.chips.map((chip) => (
+                            <button
+                              key={chip}
+                              onClick={() => handleChipClick(chip)}
+                              disabled={chatLoading}
+                              className="px-3 py-1.5 text-[11px] sm:text-xs font-medium rounded-full border border-purple-500/25 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20 hover:border-purple-500/40 hover:text-purple-200 transition-all duration-200 disabled:opacity-40"
+                            >
+                              {chip}
+                            </button>
+                          ))}
+                        </motion.div>
+                      )}
                   </div>
                 ))}
+
+                {/* Thinking indicator */}
                 {chatLoading && (
-                  <div className="flex items-start gap-3">
-                    <div className="h-8 w-8 shrink-0 rounded-lg bg-purple-600/20 text-purple-300 grid place-items-center">
-                      <BotMessageSquare className="h-4 w-4" />
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-start gap-2.5"
+                  >
+                    <div className="h-7 w-7 sm:h-8 sm:w-8 shrink-0 rounded-lg bg-purple-600/20 text-purple-300 grid place-items-center">
+                      <BotMessageSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     </div>
-                    <div className="bg-white/5 p-3.5 rounded-xl rounded-tl-sm border border-white/5 flex gap-1.5 items-center">
+                    <div className="bg-white/5 px-4 py-3 rounded-xl rounded-tl-sm border border-white/5 flex gap-1 items-center">
+                      <span className="text-xs text-slate-500 mr-2">Thinking</span>
                       <span className="w-1.5 h-1.5 rounded-full bg-purple-400/60 animate-bounce" />
-                      <span className="w-1.5 h-1.5 rounded-full bg-purple-400/60 animate-bounce" style={{ animationDelay: "0.1s" }} />
-                      <span className="w-1.5 h-1.5 rounded-full bg-purple-400/60 animate-bounce" style={{ animationDelay: "0.2s" }} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-purple-400/60 animate-bounce" style={{ animationDelay: "0.15s" }} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-purple-400/60 animate-bounce" style={{ animationDelay: "0.3s" }} />
                     </div>
-                  </div>
+                  </motion.div>
                 )}
               </div>
 
+              {/* Input */}
               <form
-                className="mt-4 relative"
-                onSubmit={(e) => { e.preventDefault(); handleChatSubmit(); }}
+                className="mt-3 sm:mt-4 relative"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  processMessage(chatInput);
+                }}
               >
                 <input
+                  ref={inputRef}
                   aria-label="Message"
-                  placeholder="Ask about skills, projects, experience..."
+                  placeholder="Ask anything about Bhushan..."
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   disabled={chatLoading}
-                  className="w-full h-12 rounded-xl border border-white/10 bg-white/[0.03] px-4 pr-24 text-white text-sm placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all"
+                  className="w-full h-11 sm:h-12 rounded-xl border border-white/10 bg-white/[0.03] px-4 pr-14 text-white text-sm placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all"
                 />
                 <Button
                   size="sm"
-                  className="absolute right-1.5 top-1.5 bottom-1.5 h-auto px-4 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 text-sm font-medium"
+                  className="absolute right-1.5 top-1.5 bottom-1.5 h-auto w-10 sm:w-auto sm:px-4 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 text-sm font-medium grid place-items-center"
                   disabled={chatLoading || !chatInput.trim()}
                 >
                   <Send className="h-4 w-4" />

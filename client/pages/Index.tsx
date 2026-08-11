@@ -1665,9 +1665,11 @@ function ChatSection() {
     [processMessage],
   );
 
-  // Focus input after bot finishes typing
+  // Focus input after bot finishes typing (skip on mount — focusing here
+  // makes the browser scroll the whole page down to the chat on load)
   useEffect(() => {
-    if (!chatLoading) inputRef.current?.focus();
+    if (!chatLoading && messageCount > 0)
+      inputRef.current?.focus({ preventScroll: true });
   }, [chatLoading, messageCount]);
 
   return (

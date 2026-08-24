@@ -308,7 +308,7 @@ function Navbar() {
       className={cn(
         "fixed top-0 left-0 right-0 z-[100] transition-all duration-500",
         scrolled
-          ? "py-3 bg-black/60 backdrop-blur-2xl border-b border-white/5 shadow-[0_4px_30px_rgba(0,0,0,0.3)]"
+          ? "py-3 bg-black/60 backdrop-blur-xl border-b border-white/5 shadow-[0_4px_30px_rgba(0,0,0,0.3)]"
           : "py-5 bg-transparent"
       )}
     >
@@ -447,11 +447,17 @@ function useMousePosition() {
   return mouse;
 }
 
-/** Particle network canvas for the hero */
+/** Particle network canvas for the hero — only animates while `active` (in view) */
 function useParticleCanvas(
   canvasRef: React.RefObject<HTMLCanvasElement | null>,
   containerRef: React.RefObject<HTMLElement | null>,
+  active: boolean,
 ) {
+  const activeRef = useRef(active);
+  useEffect(() => {
+    activeRef.current = active;
+  }, [active]);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
@@ -484,7 +490,7 @@ function useParticleCanvas(
 
       const area = width * height;
       const base = Math.round(area * 0.00005);
-      const count = Math.max(50, Math.min(150, base));
+      const count = Math.max(40, Math.min(90, base));
       particles = Array.from({ length: count }, () => ({
         x: rand(0, width),
         y: rand(0, height),
@@ -496,6 +502,11 @@ function useParticleCanvas(
     };
 
     const step = () => {
+      if (!activeRef.current || document.hidden) {
+        rafId = requestAnimationFrame(step);
+        return;
+      }
+
       ctx.clearRect(0, 0, width, height);
 
       for (const p of particles) {
@@ -555,17 +566,12 @@ function useParticleCanvas(
           }
         }
 
-        if (glow) {
-          ctx.shadowBlur = 12;
-          ctx.shadowColor = "rgba(139,92,246,0.6)";
-        }
-        ctx.fillStyle = `rgba(139,92,246,${p.alpha})`;
+        ctx.fillStyle = glow
+          ? `rgba(139,92,246,${Math.min(1, p.alpha + 0.2)})`
+          : `rgba(139,92,246,${p.alpha})`;
         ctx.beginPath();
         ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
         ctx.fill();
-        if (glow) {
-          ctx.shadowBlur = 0;
-        }
       }
 
       // Draw pointer glow
@@ -631,6 +637,10 @@ function MouseSpotlight() {
     };
 
     const animate = () => {
+      if (document.hidden) {
+        raf = requestAnimationFrame(animate);
+        return;
+      }
       curX += (targetX - curX) * 0.08;
       curY += (targetY - curY) * 0.08;
       if (spotRef.current) {
@@ -729,8 +739,17 @@ function HeroSection() {
   const yText = useTransform(scrollYProgress, [0, 1], [0, 150]);
   const opacity = useTransform(scrollYProgress, [0, 0.5], [1, 0]);
 
+  // Only true while the hero is actually on screen — lets both rAF loops
+  // below go idle once the user scrolls past, instead of burning main-thread
+  // budget for the rest of the page's scroll.
+  const heroInView = useInView(sectionRef, { amount: 0 });
+  const heroInViewRef = useRef(heroInView);
+  useEffect(() => {
+    heroInViewRef.current = heroInView;
+  }, [heroInView]);
+
   // Particle canvas
-  useParticleCanvas(canvasRef, sectionRef);
+  useParticleCanvas(canvasRef, sectionRef, heroInView);
 
   // Mouse-driven parallax on orbs
   useEffect(() => {
@@ -748,6 +767,11 @@ function HeroSection() {
     };
 
     const animate = () => {
+      if (!heroInViewRef.current || document.hidden) {
+        raf = requestAnimationFrame(animate);
+        return;
+      }
+
       smoothX += (mx - smoothX) * 0.04;
       smoothY += (my - smoothY) * 0.04;
       const dx = (smoothX - 0.5) * 2;
@@ -2266,6 +2290,10 @@ function CustomCursor() {
     const onUp = () => el.classList.remove("clicking");
 
     const animate = () => {
+      if (document.hidden) {
+        raf = requestAnimationFrame(animate);
+        return;
+      }
       curX += (mouseX - curX) * ease;
       curY += (mouseY - curY) * ease;
       el.style.transform = `translate(${curX - 28}px,${curY - 28}px)`;

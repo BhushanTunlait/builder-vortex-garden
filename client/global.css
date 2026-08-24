@@ -241,6 +241,16 @@
     pointer-events: none;
   }
 
+  /* ─── Below-fold render skipping ───
+     Sections carrying this class aren't laid out or painted until they
+     approach the viewport, so scrolling the hero doesn't pay for the other
+     six sections' gradients, blurred blobs and cards. contain-intrinsic-size
+     reserves an estimated height so the scrollbar doesn't jump. */
+  .cv-auto {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 800px;
+  }
+
   /* ─── Section Backgrounds ─── */
   .section-dark {
     background: linear-gradient(180deg, #030014 0%, #0a0118 50%, #030014 100%);

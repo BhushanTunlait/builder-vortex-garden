@@ -555,23 +555,32 @@ function useParticleCanvas(
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       const area = width * height;
-      const base = Math.round(area * 0.00005);
-      const count = Math.max(40, Math.min(90, base));
+      const base = Math.round(area * 0.00004);
+      const count = Math.max(35, Math.min(60, base));
       particles = Array.from({ length: count }, () => ({
         x: rand(0, width),
         y: rand(0, height),
-        vx: rand(-0.3, 0.3),
-        vy: rand(-0.3, 0.3),
+        // Doubled vs the 60fps original so drift speed looks the same at 30fps.
+        vx: rand(-0.6, 0.6),
+        vy: rand(-0.6, 0.6),
         size: rand(1, 2.5),
         alpha: rand(0.3, 0.8),
       }));
     };
 
-    const step = () => {
-      if (!activeRef.current || document.hidden) {
-        rafId = requestAnimationFrame(step);
-        return;
-      }
+    // The simulation runs at 30fps, not display rate. The particles drift at
+    // ~0.3px/frame, so half-rate is imperceptible — but it halves the biggest
+    // per-frame cost left in the hero: a full-viewport canvas clear + redraw.
+    // This also frees main-thread budget for the scroll-linked hero text
+    // transform, which is what the user actually feels while scrolling.
+    const FRAME_MS = 1000 / 30;
+    let lastFrame = 0;
+
+    const step = (now: number) => {
+      rafId = requestAnimationFrame(step);
+      if (!activeRef.current || document.hidden) return;
+      if (now - lastFrame < FRAME_MS - 1) return;
+      lastFrame = now;
 
       ctx.clearRect(0, 0, width, height);
 
@@ -662,15 +671,20 @@ function useParticleCanvas(
         ctx.fill();
       }
 
-      rafId = requestAnimationFrame(step);
     };
 
-    const onEnter = () => { pointer.active = true; };
+    // Rect cached on enter rather than measured per mousemove —
+    // getBoundingClientRect() in a mousemove handler is a forced layout.
+    let containerRect: DOMRect | null = null;
+    const onEnter = () => {
+      containerRect = container.getBoundingClientRect();
+      pointer.active = true;
+    };
     const onLeave = () => { pointer.active = false; };
     const onMove = (e: MouseEvent) => {
-      const rect = container.getBoundingClientRect();
-      pointer.x = e.clientX - rect.left;
-      pointer.y = e.clientY - rect.top;
+      if (!containerRect) return;
+      pointer.x = e.clientX - containerRect.left;
+      pointer.y = e.clientY - containerRect.top;
     };
 
     resize();
@@ -1062,7 +1076,7 @@ function StatsBar() {
   const inView = useInView(ref, { once: true, margin: "-100px" });
 
   return (
-    <section id="stats" ref={ref} className="relative py-24 section-darker overflow-hidden">
+    <section id="stats" ref={ref} className="cv-auto relative py-24 section-darker overflow-hidden">
       {/* Background effects */}
       <div className="absolute inset-0 bg-gradient-to-b from-transparent via-purple-500/5 to-transparent pointer-events-none" />
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[350px] h-[200px] md:w-[900px] md:h-[400px] bg-purple-600/5 rounded-full blur-[48px] md:blur-[64px] pointer-events-none" />
@@ -1113,7 +1127,7 @@ function ServicesSection() {
   const inView = useInView(ref, { once: true, margin: "-100px" });
 
   return (
-    <section id="services" ref={ref} className="py-16 md:py-28 section-dark relative overflow-hidden">
+    <section id="services" ref={ref} className="cv-auto py-16 md:py-28 section-dark relative overflow-hidden">
       <div className="absolute top-0 right-0 w-[300px] h-[300px] md:w-[600px] md:h-[600px] bg-purple-600/5 rounded-full blur-[48px] md:blur-[64px] pointer-events-none" />
 
       <motion.div
@@ -1166,7 +1180,7 @@ function ProjectsSection() {
   const inView = useInView(ref, { once: true, margin: "-100px" });
 
   return (
-    <section id="projects" ref={ref} className="py-16 md:py-28 section-darker relative overflow-hidden">
+    <section id="projects" ref={ref} className="cv-auto py-16 md:py-28 section-darker relative overflow-hidden">
       <div className="absolute bottom-0 left-0 w-[250px] h-[250px] md:w-[500px] md:h-[500px] bg-indigo-600/5 rounded-full blur-[48px] md:blur-[64px] pointer-events-none" />
 
       <motion.div
@@ -1247,7 +1261,7 @@ function TechStackSection() {
   const doubled = [...techStack, ...techStack];
 
   return (
-    <section ref={ref} className="py-20 section-dark relative overflow-hidden">
+    <section ref={ref} className="cv-auto py-20 section-dark relative overflow-hidden">
       <motion.div
         initial="hidden"
         animate={inView ? "visible" : "hidden"}
@@ -1291,7 +1305,7 @@ function AboutSection() {
   const inView = useInView(ref, { once: true, margin: "-100px" });
 
   return (
-    <section id="about" ref={ref} className="py-16 md:py-28 section-darker relative overflow-hidden">
+    <section id="about" ref={ref} className="cv-auto py-16 md:py-28 section-darker relative overflow-hidden">
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[350px] h-[350px] md:w-[800px] md:h-[800px] bg-gradient-to-r from-purple-600/5 to-indigo-600/5 rounded-full blur-[48px] md:blur-[64px] pointer-events-none" />
 
       <motion.div
@@ -1830,7 +1844,7 @@ function ChatSection() {
   }, [chatLoading, messageCount]);
 
   return (
-    <section id="assistant" ref={ref} className="py-16 md:py-28 section-dark relative overflow-hidden">
+    <section id="assistant" ref={ref} className="cv-auto py-16 md:py-28 section-dark relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-b from-purple-600/3 via-transparent to-transparent pointer-events-none" />
 
       <motion.div
@@ -2099,7 +2113,7 @@ function ContactSection() {
   };
 
   return (
-    <section id="contact" ref={ref} className="py-16 md:py-28 section-darker relative overflow-hidden">
+    <section id="contact" ref={ref} className="cv-auto py-16 md:py-28 section-darker relative overflow-hidden">
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[350px] h-[200px] md:w-[800px] md:h-[400px] bg-gradient-to-b from-purple-600/10 to-transparent rounded-full blur-[48px] md:blur-[64px] pointer-events-none" />
 
       <motion.div
@@ -2273,7 +2287,7 @@ function ContactSection() {
 
 function Footer() {
   return (
-    <footer className="border-t border-white/5 bg-[#020010]">
+    <footer className="cv-auto border-t border-white/5 bg-[#020010]">
       <div className="mx-auto max-w-[1200px] px-6 py-12">
         <div className="flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex flex-col items-center md:items-start gap-2">

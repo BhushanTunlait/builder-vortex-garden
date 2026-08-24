@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { motion, useInView, useScroll, useTransform } from "framer-motion";
+import { motion, useInView } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
 import {
@@ -267,22 +267,21 @@ function AnimatedCounter({
   );
 }
 
-function previewCandidates(url: string, width = 1200) {
-  const u = encodeURIComponent(url);
-  return [
-    `https://s.wordpress.com/mshots/v1/${u}?w=${width}&scale=2`,
-    `https://s0.wp.com/mshots/v1/${u}?w=${width}&scale=2`,
-    `https://image.thum.io/get/width/${width}/noanimate/${url}`,
-  ];
-}
+/* Static, locally-hosted previews. The old version requested live screenshots
+   from mshots/thum.io at view time — those services take 5-20s to render a
+   fresh capture, which is why the Projects section always felt like it was
+   still "loading". These are pre-captured WebP files (~25-55KB each) served
+   from our own origin; re-capture and replace when a project's design changes. */
+const PROJECT_PREVIEWS: Record<string, string> = {
+  "https://trimbakeshwarkalsarpdoshpooja.com/": "/projects/trimbakeshwar.webp",
+  "https://khushigoyal.site": "/projects/khushigoyal.webp",
+};
 
 function PreviewImage({ url, alt }: { url: string; alt: string }) {
-  const urls = previewCandidates(url);
-  const imgRef = useRef<HTMLImageElement | null>(null);
-  const idxRef = useRef(0);
   const [failed, setFailed] = useState(false);
+  const src = PROJECT_PREVIEWS[url];
 
-  if (failed) {
+  if (!src || failed) {
     return (
       <div className="h-full w-full bg-gradient-to-br from-purple-900/40 via-indigo-900/40 to-pink-900/40 grid place-items-center">
         <span className="text-lg font-display font-semibold text-white/60">
@@ -294,16 +293,11 @@ function PreviewImage({ url, alt }: { url: string; alt: string }) {
 
   return (
     <img
-      ref={imgRef}
-      src={urls[0]}
+      src={src}
       alt={alt}
       loading="lazy"
-      onError={(e) => {
-        idxRef.current += 1;
-        const next = urls[idxRef.current];
-        if (next) (e.currentTarget as HTMLImageElement).src = next;
-        else setFailed(true);
-      }}
+      decoding="async"
+      onError={() => setFailed(true)}
       className="h-full w-full object-cover object-top transition-all duration-700 group-hover:scale-110 group-hover:brightness-75"
     />
   );
@@ -332,7 +326,7 @@ function Navbar() {
       className={cn(
         "fixed top-0 left-0 right-0 z-[100] transition-all duration-500",
         scrolled
-          ? "py-3 bg-black/60 backdrop-blur-xl border-b border-white/5 shadow-[0_4px_30px_rgba(0,0,0,0.3)]"
+          ? "py-3 bg-black/70 backdrop-blur-md border-b border-white/5 shadow-[0_4px_30px_rgba(0,0,0,0.3)]"
           : "py-5 bg-transparent"
       )}
     >
@@ -487,24 +481,6 @@ function TiltCard({
    HOOKS: Mouse Parallax & Particle Canvas
    ═══════════════════════════════════════════════ */
 
-function useMousePosition() {
-  const mouse = useRef({ x: 0, y: 0, nx: 0.5, ny: 0.5 });
-  useEffect(() => {
-    const finePointer = matchMedia("(pointer: fine)").matches;
-    const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (!finePointer || reduceMotion) return;
-    const handler = (e: MouseEvent) => {
-      mouse.current.x = e.clientX;
-      mouse.current.y = e.clientY;
-      mouse.current.nx = e.clientX / window.innerWidth;
-      mouse.current.ny = e.clientY / window.innerHeight;
-    };
-    window.addEventListener("mousemove", handler, { passive: true });
-    return () => window.removeEventListener("mousemove", handler);
-  }, []);
-  return mouse;
-}
-
 /** Particle network canvas for the hero — only animates while `active` (in view) */
 function useParticleCanvas(
   canvasRef: React.RefObject<HTMLCanvasElement | null>,
@@ -522,13 +498,12 @@ function useParticleCanvas(
     if (!canvas || !container) return;
     const finePointer = matchMedia("(pointer: fine)").matches;
     const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    // Skip the whole simulation on touch devices. The particle field's only
-    // interactive payoff is cursor repulsion, which a touch device can never
-    // trigger, so on phones it was pure cost — and phones are exactly where the
-    // per-frame canvas fill hurts most. The hero still has its orbs, grid and
-    // gradient there, so it doesn't read as empty.
-    if (reduceMotion || !finePointer) return;
-
+    // Idle cost of this canvas is now ZERO: the constellation is drawn once as
+    // a static frame, and the physics loop runs only while the pointer is
+    // actually inside the hero (desktop only). Nobody watches dust drift — the
+    // perceived value is the texture (always there, free) and the cursor
+    // repulsion (only possible while hovering, so that's the only time we pay
+    // for it). Touch devices and reduced-motion users get the static frame.
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
@@ -568,22 +543,7 @@ function useParticleCanvas(
       }));
     };
 
-    // The simulation runs at 30fps, not display rate. The particles drift at
-    // ~0.3px/frame, so half-rate is imperceptible — but it halves the biggest
-    // per-frame cost left in the hero: a full-viewport canvas clear + redraw.
-    // This also frees main-thread budget for the scroll-linked hero text
-    // transform, which is what the user actually feels while scrolling.
-    const FRAME_MS = 1000 / 30;
-    let lastFrame = 0;
-
-    const step = (now: number) => {
-      rafId = requestAnimationFrame(step);
-      if (!activeRef.current || document.hidden) return;
-      if (now - lastFrame < FRAME_MS - 1) return;
-      lastFrame = now;
-
-      ctx.clearRect(0, 0, width, height);
-
+    const physics = () => {
       for (const p of particles) {
         p.x += p.vx;
         p.y += p.vy;
@@ -606,6 +566,10 @@ function useParticleCanvas(
         p.vx *= 0.99;
         p.vy *= 0.99;
       }
+    };
+
+    const drawFrame = () => {
+      ctx.clearRect(0, 0, width, height);
 
       // Draw connections.
       // This pass is inherently O(n²) — every particle is tested against every
@@ -670,7 +634,24 @@ function useParticleCanvas(
         ctx.arc(pointer.x, pointer.y, 200, 0, Math.PI * 2);
         ctx.fill();
       }
+    };
 
+    // 30fps is plenty for slow-drifting dust; the loop stops itself the moment
+    // the pointer leaves the hero, the hero leaves the viewport, or the tab is
+    // hidden. The last drawn frame simply stays on the canvas.
+    const FRAME_MS = 1000 / 30;
+    let lastFrame = 0;
+
+    const step = (now: number) => {
+      if (!pointer.active || !activeRef.current || document.hidden) {
+        rafId = 0;
+        return;
+      }
+      rafId = requestAnimationFrame(step);
+      if (now - lastFrame < FRAME_MS - 1) return;
+      lastFrame = now;
+      physics();
+      drawFrame();
     };
 
     // Rect cached on enter rather than measured per mousemove —
@@ -679,6 +660,7 @@ function useParticleCanvas(
     const onEnter = () => {
       containerRect = container.getBoundingClientRect();
       pointer.active = true;
+      if (!rafId) rafId = requestAnimationFrame(step);
     };
     const onLeave = () => { pointer.active = false; };
     const onMove = (e: MouseEvent) => {
@@ -687,87 +669,28 @@ function useParticleCanvas(
       pointer.y = e.clientY - containerRect.top;
     };
 
+    const onResize = () => {
+      resize();
+      drawFrame(); // keep the static texture after any reflow
+    };
+
     resize();
-    window.addEventListener("resize", resize);
-    if (finePointer) {
+    drawFrame(); // the one unconditional draw — the idle hero costs nothing after this
+    window.addEventListener("resize", onResize);
+    if (!reduceMotion && finePointer) {
       container.addEventListener("mouseenter", onEnter);
       container.addEventListener("mouseleave", onLeave);
       container.addEventListener("mousemove", onMove);
     }
-    rafId = requestAnimationFrame(step);
 
     return () => {
-      cancelAnimationFrame(rafId);
-      window.removeEventListener("resize", resize);
+      if (rafId) cancelAnimationFrame(rafId);
+      window.removeEventListener("resize", onResize);
       container.removeEventListener("mouseenter", onEnter);
       container.removeEventListener("mouseleave", onLeave);
       container.removeEventListener("mousemove", onMove);
     };
   }, [canvasRef, containerRef]);
-}
-
-/* ═══════════════════════════════════════════════
-   GLOBAL MOUSE SPOTLIGHT (follows cursor across page)
-   ═══════════════════════════════════════════════ */
-
-function MouseSpotlight() {
-  const spotRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const finePointer = matchMedia("(pointer: fine)").matches;
-    const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (!finePointer || reduceMotion) return;
-
-    let curX = -500, curY = -500;
-    let targetX = -500, targetY = -500;
-    let raf = 0;
-
-    const onMove = (e: MouseEvent) => {
-      // No `+ window.scrollY` here: the spotlight is position:fixed, so its
-      // coordinates are viewport-relative. Adding the scroll offset pushed it
-      // permanently below the fold after ~700px of scrolling — the glow simply
-      // stopped following the cursor while its layer kept animating off-screen.
-      targetX = e.clientX;
-      targetY = e.clientY;
-      if (!raf && !document.hidden) raf = requestAnimationFrame(animate);
-    };
-
-    // Self-halting easing loop: runs only while there is distance left to
-    // close, then stops until the pointer moves again. Previously this span
-    // at 60fps for the entire session even with a completely idle mouse.
-    const animate = () => {
-      raf = 0;
-      const dx = targetX - curX;
-      const dy = targetY - curY;
-      curX += dx * 0.08;
-      curY += dy * 0.08;
-      const el = spotRef.current;
-      if (el) el.style.transform = `translate3d(${curX - 300}px, ${curY - 300}px, 0)`;
-      if ((Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) && !document.hidden) {
-        raf = requestAnimationFrame(animate);
-      }
-    };
-
-    window.addEventListener("mousemove", onMove, { passive: true });
-
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, []);
-
-  return (
-    <div
-      ref={spotRef}
-      className="pointer-events-none fixed top-0 left-0 w-[600px] h-[600px] z-[1] opacity-40 hidden md:block"
-      style={{
-        background: "radial-gradient(circle, rgba(139,92,246,0.12) 0%, rgba(99,102,241,0.06) 30%, transparent 70%)",
-        transform: "translate(-500px, -500px)",
-        willChange: "transform",
-      }}
-      aria-hidden="true"
-    />
-  );
 }
 
 /* ═══════════════════════════════════════════════
@@ -869,71 +792,19 @@ function MagneticButton({ children, className }: { children: React.ReactNode; cl
 function HeroSection() {
   const sectionRef = useRef<HTMLElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const orb1Ref = useRef<HTMLDivElement>(null);
-  const orb2Ref = useRef<HTMLDivElement>(null);
-  const orb3Ref = useRef<HTMLDivElement>(null);
 
-  const { scrollYProgress } = useScroll({
-    target: sectionRef,
-    offset: ["start start", "end start"],
-  });
-  const yText = useTransform(scrollYProgress, [0, 1], [0, 150]);
-  const opacity = useTransform(scrollYProgress, [0, 0.5], [1, 0]);
-
-  // Only true while the hero is actually on screen — lets both rAF loops
-  // below go idle once the user scrolls past, instead of burning main-thread
-  // budget for the rest of the page's scroll.
+  // NOTE deliberately absent: the scroll-linked text parallax
+  // (useScroll/useTransform writing y+opacity every scroll frame), the
+  // mouse-parallax rAF loop on the orbs, and the global MouseSpotlight.
+  // Together they put JS on the scroll/pointer path of the first viewport —
+  // the exact place the site was reported as laggy. The hero now runs zero
+  // continuous JavaScript: entrance animations are one-shot, the orbs animate
+  // opacity via CSS on the compositor, and the particle canvas is a static
+  // frame that only simulates while the pointer is inside it.
   const heroInView = useInView(sectionRef, { amount: 0 });
-  const heroInViewRef = useRef(heroInView);
-  useEffect(() => {
-    heroInViewRef.current = heroInView;
-  }, [heroInView]);
 
-  // Particle canvas
+  // Particle canvas — static frame; interactive only while hovered & in view
   useParticleCanvas(canvasRef, sectionRef, heroInView);
-
-  // Mouse-driven parallax on orbs
-  useEffect(() => {
-    const finePointer = matchMedia("(pointer: fine)").matches;
-    const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (!finePointer || reduceMotion) return;
-
-    let raf = 0;
-    let mx = 0.5, my = 0.5;
-    let smoothX = 0.5, smoothY = 0.5;
-
-    const onMove = (e: MouseEvent) => {
-      mx = e.clientX / window.innerWidth;
-      my = e.clientY / window.innerHeight;
-    };
-
-    const animate = () => {
-      if (!heroInViewRef.current || document.hidden) {
-        raf = requestAnimationFrame(animate);
-        return;
-      }
-
-      smoothX += (mx - smoothX) * 0.04;
-      smoothY += (my - smoothY) * 0.04;
-      const dx = (smoothX - 0.5) * 2;
-      const dy = (smoothY - 0.5) * 2;
-
-      if (orb1Ref.current) orb1Ref.current.style.transform = `translate3d(${dx * 40}px, ${dy * 30}px, 0)`;
-      if (orb2Ref.current) orb2Ref.current.style.transform = `translate3d(${dx * -30}px, ${dy * -25}px, 0)`;
-      // -50% keeps orb3 horizontally centred (see the note on its element).
-      if (orb3Ref.current) orb3Ref.current.style.transform = `translate(-50%, 0) translate3d(${dx * 20}px, ${dy * 15}px, 0)`;
-
-      raf = requestAnimationFrame(animate);
-    };
-
-    window.addEventListener("mousemove", onMove, { passive: true });
-    raf = requestAnimationFrame(animate);
-
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      cancelAnimationFrame(raf);
-    };
-  }, []);
 
   return (
     <section
@@ -951,30 +822,16 @@ function HeroSection() {
       {/* Animated Grid */}
       <div className="absolute inset-0 animated-grid z-[1]" />
 
-      {/* Parallax Floating Orbs — move with mouse, capped to viewport */}
+      {/* Floating Orbs — pure CSS, opacity-only pulse on the compositor.
+          No refs, no JS transforms; orb3 centres itself with the class again. */}
+      <div className="absolute top-[15%] left-[15%] w-[250px] h-[250px] md:w-[500px] md:h-[500px] bg-purple-600/20 rounded-full blur-[50px] md:blur-[80px] animate-pulse-glow pointer-events-none z-[1]" />
       <div
-        ref={orb1Ref}
-        className="absolute top-[15%] left-[15%] w-[250px] h-[250px] md:w-[500px] md:h-[500px] bg-purple-600/20 rounded-full blur-[50px] md:blur-[80px] animate-pulse-glow pointer-events-none z-[1] will-change-transform"
-      />
-      <div
-        ref={orb2Ref}
-        className="absolute bottom-[15%] right-[15%] w-[200px] h-[200px] md:w-[400px] md:h-[400px] bg-indigo-600/20 rounded-full blur-[50px] md:blur-[70px] animate-pulse-glow pointer-events-none z-[1] will-change-transform"
+        className="absolute bottom-[15%] right-[15%] w-[200px] h-[200px] md:w-[400px] md:h-[400px] bg-indigo-600/20 rounded-full blur-[50px] md:blur-[70px] animate-pulse-glow pointer-events-none z-[1]"
         style={{ animationDelay: "1.5s" }}
       />
-      {/* No -translate-x-1/2 class here: the parallax loop writes an inline
-          `transform`, which beats the class and would silently drop the
-          centering, kicking this orb ~300px right. Centering is folded into
-          the transform the loop writes instead. */}
-      <div
-        ref={orb3Ref}
-        className="absolute top-[40%] left-[50%] w-[300px] h-[300px] md:w-[600px] md:h-[600px] bg-pink-600/10 rounded-full blur-[60px] md:blur-[100px] pointer-events-none z-[1] will-change-transform"
-        style={{ transform: "translate(-50%, 0)" }}
-      />
+      <div className="absolute top-[40%] left-[50%] -translate-x-1/2 w-[300px] h-[300px] md:w-[600px] md:h-[600px] bg-pink-600/10 rounded-full blur-[60px] md:blur-[100px] pointer-events-none z-[1]" />
 
-      <motion.div
-        style={{ y: yText, opacity }}
-        className="relative z-10 mx-auto max-w-[1200px] px-5 sm:px-6 py-20 md:py-32 text-center"
-      >
+      <div className="relative z-10 mx-auto max-w-[1200px] px-5 sm:px-6 py-20 md:py-32 text-center">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1055,7 +912,7 @@ function HeroSection() {
             <ChevronDown className="h-4 w-4 animate-bounce-subtle" />
           </a>
         </motion.div>
-      </motion.div>
+      </div>
     </section>
   );
 }
@@ -1325,6 +1182,8 @@ function AboutSection() {
                 <img
                   src="https://cdn.builder.io/api/v1/image/assets%2F7dc11070cd594ebb925743307858add3%2F0e608cd323284310addd5b876e127705?format=webp&width=800"
                   alt="Bhushan Tunlait"
+                  loading="lazy"
+                  decoding="async"
                   className="h-full w-full object-contain animate-breathing-human"
                   draggable={false}
                 />
@@ -1710,8 +1569,10 @@ function TypewriterText({
     setDisplayedChars(0);
     doneRef.current = false;
     let i = 0;
+    // 3 chars per tick at 3x the interval: same chars/second as 1-char ticks,
+    // but a third of the setState calls — each one re-renders the chat subtree.
     const interval = setInterval(() => {
-      i++;
+      i = Math.min(i + 3, text.length);
       setDisplayedChars(i);
       if (i >= text.length) {
         clearInterval(interval);
@@ -1720,7 +1581,7 @@ function TypewriterText({
           onDone?.();
         }
       }
-    }, speed);
+    }, speed * 3);
     return () => clearInterval(interval);
   }, [text, speed, onDone]);
 
@@ -2523,7 +2384,6 @@ function CustomCursor() {
 export default function Index() {
   return (
     <main className="min-h-screen flex flex-col bg-[#030014] relative">
-      <MouseSpotlight />
       <Navbar />
       <HeroSection />
       <StatsBar />

@@ -12,6 +12,20 @@
       href="https://cdn.builder.io/api/v1/image/assets%2F7dc11070cd594ebb925743307858add3%2Faf0384e0622043ecbc7f84c78ea51bb1?format=webp&width=256"
     />
     <title>Bhushan T — Full-Stack & Flutter Developer | AI Agents</title>
+
+    <!-- Fonts are linked here rather than @import-ed from global.css. An
+         @import inside the stylesheet serialises the load: the browser must
+         fetch and parse global.css before it even discovers the font request.
+         Declared in the HTML head, the preconnect opens the connection during
+         HTML parse and the fonts download in parallel with the CSS/JS.
+         Weights trimmed to the ones actually used (no font-light / -extrabold /
+         -black anywhere in the app; mono only needs 400/500). -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    />
     <!-- Canonical URL for SEO -->
     <link rel="canonical" href="https://bhushantunlait.netlify.app/" />
 
@@ -52,22 +66,10 @@
       content="https://bhushantunlait.netlify.app/favicon.svg"
     />
 
-    <!-- Google Analytics (replace G-XXXXXXX with your GA4 Measurement ID) -->
-    <!-- Remove or replace if you don't use Google Analytics -->
-    <script
-      async
-      src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXX"
-    ></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-
-      function gtag() {
-        dataLayer.push(arguments);
-      }
-      gtag("js", new Date());
-      /* Replace 'G-XXXXXXX' with your measurement id */
-      gtag("config", "G-XXXXXXX");
-    </script>
+    <!-- Google Analytics removed: the tag was still the scaffold placeholder
+         id (G-XXXXXXX), so every visit paid for a googletagmanager.com script
+         fetch + execution that reported to nothing. To re-enable, drop the
+         gtag snippet back in with a real GA4 measurement id. -->
 
     <!-- Structured data (Schema.org) for Person, Website and Projects -->
     <script type="application/ld+json">

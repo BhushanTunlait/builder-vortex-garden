@@ -109,9 +109,15 @@ export default {
           "0%, 100%": { transform: "translateY(0) rotate(0deg)" },
           "50%": { transform: "translateY(-30px) rotate(3deg)" },
         },
+        // Opacity only — deliberately NOT `transform: scale()`. This drives the
+        // hero orbs, which carry `filter: blur(80px+)`. Animating a transform on
+        // a filtered element forces the blur to be re-rasterized every frame at
+        // full radius; animating opacity alone lets the compositor reuse the
+        // already-rasterized texture and just alpha-blend it. Visually near
+        // identical on a soft 80px blur, dramatically cheaper.
         "pulse-glow": {
-          "0%, 100%": { opacity: "0.4", transform: "scale(1)" },
-          "50%": { opacity: "0.8", transform: "scale(1.05)" },
+          "0%, 100%": { opacity: "0.4" },
+          "50%": { opacity: "0.8" },
         },
         shimmer: {
           "0%": { backgroundPosition: "-200% 0" },

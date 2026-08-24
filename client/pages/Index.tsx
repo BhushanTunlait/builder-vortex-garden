@@ -150,7 +150,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <motion.div
       variants={fadeUp}
-      className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-purple-500/20 bg-purple-500/10 backdrop-blur-sm mb-6"
+      className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-purple-500/20 bg-purple-500/10 mb-6"
     >
       <div className="h-1.5 w-1.5 rounded-full bg-purple-400 animate-pulse" />
       <span className="text-xs font-semibold uppercase tracking-[0.2em] text-purple-300">
@@ -186,29 +186,48 @@ function AnimatedCounter({
   index: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const numberRef = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true, margin: "-50px" });
-  const [display, setDisplay] = useState("0");
+
+  // Derived as primitives so the effect's deps stay referentially stable —
+  // a raw .match() result is a fresh object on every render.
+  const target = Number.parseInt(value, 10);
+  const hasNumber = Number.isFinite(target);
+  const suffix = hasNumber ? value.replace(/^\d+/, "") : "";
 
   useEffect(() => {
     if (!inView) return;
-    const numericMatch = value.match(/^(\d+)/);
-    if (!numericMatch) { setDisplay(value); return; }
-    const target = parseInt(numericMatch[1], 10);
-    const suffix = value.replace(/^\d+/, "");
+    const node = numberRef.current;
+    if (!node) return;
+    if (!hasNumber) {
+      node.textContent = value;
+      return;
+    }
+
+    // Straight to the final value when the user asked for less motion.
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      node.textContent = `${target}${suffix}`;
+      return;
+    }
+
     const duration = 1800;
     const startTime = performance.now();
+    let raf = 0;
 
+    // Writes textContent directly rather than calling setState per frame: a
+    // state update here re-rendered this motion.div + its TiltCard subtree on
+    // every one of ~108 frames, x4 counters, exactly as the stats row scrolls
+    // into view. The counter owns one text node — nothing else needs to react.
     const tick = (now: number) => {
-      const elapsed = now - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      // Ease out cubic
-      const eased = 1 - Math.pow(1 - progress, 3);
-      const current = Math.round(target * eased);
-      setDisplay(`${current}${suffix}`);
-      if (progress < 1) requestAnimationFrame(tick);
+      const progress = Math.min((now - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+      node.textContent = `${Math.round(target * eased)}${suffix}`;
+      if (progress < 1) raf = requestAnimationFrame(tick);
     };
-    requestAnimationFrame(tick);
-  }, [inView, value]);
+    raf = requestAnimationFrame(tick);
+
+    return () => cancelAnimationFrame(raf);
+  }, [inView, value, suffix, target, hasNumber]);
 
   return (
     <motion.div
@@ -226,9 +245,14 @@ function AnimatedCounter({
           {icon}
         </div>
 
-        {/* Number */}
-        <div className="text-4xl md:text-5xl font-display font-bold text-white mb-1 tracking-tight text-glow">
-          {display}
+        {/* Number — text is driven imperatively by the count-up effect above.
+            Rendering the suffix up front keeps the box the right width so the
+            row doesn't reflow as digits land. */}
+        <div
+          ref={numberRef}
+          className="text-4xl md:text-5xl font-display font-bold text-white mb-1 tracking-tight text-glow"
+        >
+          {hasNumber ? `0${suffix}` : value}
         </div>
 
         {/* Label */}
@@ -354,7 +378,7 @@ function Navbar() {
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -20 }}
-          className="md:hidden absolute top-full left-0 right-0 bg-black/95 backdrop-blur-2xl border-b border-white/5 p-6 space-y-2"
+          className="md:hidden absolute top-full left-0 right-0 bg-black/95 border-b border-white/5 p-6 space-y-2"
         >
           {NAV_LINKS.map((link) => (
             <a
@@ -395,29 +419,63 @@ function TiltCard({
   intensity?: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // Rect is measured once on enter instead of on every mousemove. Reading
+  // getBoundingClientRect() and then writing .style.transform in the same
+  // handler forces a synchronous layout per event (~120/sec, x9 TiltCards).
+  const rectRef = useRef<DOMRect | null>(null);
+  const frameRef = useRef(0);
+  const pendingRef = useRef({ x: 0, y: 0 });
 
-  const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
+  const onEnter = (e: React.MouseEvent<HTMLDivElement>) => {
     const el = ref.current;
     if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const nx = (e.clientX - rect.left) / rect.width - 0.5;
-    const ny = (e.clientY - rect.top) / rect.height - 0.5;
-    const rx = -ny * intensity;
-    const ry = nx * intensity;
-    el.style.transform = `perspective(800px) rotateX(${rx}deg) rotateY(${ry}deg) scale3d(1.02,1.02,1.02)`;
+    rectRef.current = el.getBoundingClientRect();
+    // Promote only while actually hovering — a permanent will-change on every
+    // card keeps 9 compositor layers alive for effects that are idle.
+    el.style.willChange = "transform";
+    pendingRef.current = { x: e.clientX, y: e.clientY };
+  };
+
+  const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!rectRef.current) return;
+    pendingRef.current = { x: e.clientX, y: e.clientY };
+    if (frameRef.current) return;
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = 0;
+      const el = ref.current;
+      const rect = rectRef.current;
+      if (!el || !rect) return;
+      const { x, y } = pendingRef.current;
+      const nx = (x - rect.left) / rect.width - 0.5;
+      const ny = (y - rect.top) / rect.height - 0.5;
+      el.style.transform = `perspective(800px) rotateX(${-ny * intensity}deg) rotateY(${nx * intensity}deg) scale3d(1.02,1.02,1.02)`;
+    });
   };
 
   const onLeave = () => {
+    if (frameRef.current) {
+      cancelAnimationFrame(frameRef.current);
+      frameRef.current = 0;
+    }
+    rectRef.current = null;
     const el = ref.current;
-    if (el) el.style.transform = "perspective(800px) rotateX(0deg) rotateY(0deg) scale3d(1,1,1)";
+    if (el) {
+      el.style.transform = "perspective(800px) rotateX(0deg) rotateY(0deg) scale3d(1,1,1)";
+      el.style.willChange = "auto";
+    }
   };
+
+  useEffect(() => () => {
+    if (frameRef.current) cancelAnimationFrame(frameRef.current);
+  }, []);
 
   return (
     <div
       ref={ref}
+      onMouseEnter={onEnter}
       onMouseMove={onMove}
       onMouseLeave={onLeave}
-      className={cn("transition-transform duration-200 ease-out will-change-transform", className)}
+      className={cn("transition-transform duration-200 ease-out", className)}
       style={{ transformStyle: "preserve-3d" }}
     >
       {children}
@@ -464,12 +522,20 @@ function useParticleCanvas(
     if (!canvas || !container) return;
     const finePointer = matchMedia("(pointer: fine)").matches;
     const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduceMotion) return;
+    // Skip the whole simulation on touch devices. The particle field's only
+    // interactive payoff is cursor repulsion, which a touch device can never
+    // trigger, so on phones it was pure cost — and phones are exactly where the
+    // per-frame canvas fill hurts most. The hero still has its orbs, grid and
+    // gradient there, so it doesn't read as empty.
+    if (reduceMotion || !finePointer) return;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    let dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    // Cap at 1.5x rather than 2x: on a retina panel this is the difference
+    // between filling ~4x and ~2.25x the CSS pixels every frame, and at this
+    // blur/opacity the extra density is not perceptible.
+    let dpr = Math.max(1, Math.min(1.5, window.devicePixelRatio || 1));
     let width = 0, height = 0;
     type P = { x: number; y: number; vx: number; vy: number; size: number; alpha: number };
     let particles: P[] = [];
@@ -481,7 +547,7 @@ function useParticleCanvas(
       const rect = container.getBoundingClientRect();
       width = Math.max(1, rect.width);
       height = Math.max(1, rect.height);
-      dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      dpr = Math.max(1, Math.min(1.5, window.devicePixelRatio || 1));
       canvas.width = Math.floor(width * dpr);
       canvas.height = Math.floor(height * dpr);
       canvas.style.width = width + "px";
@@ -515,12 +581,13 @@ function useParticleCanvas(
         if (p.x < 0 || p.x > width) p.vx *= -1;
         if (p.y < 0 || p.y > height) p.vy *= -1;
 
-        // Mouse repulsion
+        // Mouse repulsion — squared-distance reject before any square root.
         if (pointer.active) {
           const dx = p.x - pointer.x;
           const dy = p.y - pointer.y;
-          const dist = Math.hypot(dx, dy);
-          if (dist < 120 && dist > 0) {
+          const distSq = dx * dx + dy * dy;
+          if (distSq < 120 * 120 && distSq > 0) {
+            const dist = Math.sqrt(distSq);
             const force = (1 - dist / 120) * 0.8;
             p.vx += (dx / dist) * force;
             p.vy += (dy / dist) * force;
@@ -531,24 +598,34 @@ function useParticleCanvas(
         p.vy *= 0.99;
       }
 
-      // Draw connections
+      // Draw connections.
+      // This pass is inherently O(n²) — every particle is tested against every
+      // other one. What matters is the cost of the *rejection*, since the vast
+      // majority of pairs are out of range: compare squared distances so the
+      // common case is two multiplies and a compare, take the square root only
+      // for pairs that actually connect, and reject on dx before touching dy.
+      // Math.hypot() is correct but slow (it guards against over/underflow),
+      // and it was being called on every pair, every frame.
       const maxDist = 130;
-      for (let i = 0; i < particles.length; i++) {
+      const maxDistSq = maxDist * maxDist;
+      const count = particles.length;
+      ctx.lineWidth = 0.8;
+      for (let i = 0; i < count; i++) {
         const p = particles[i];
-        for (let j = i + 1; j < particles.length; j++) {
+        for (let j = i + 1; j < count; j++) {
           const q = particles[j];
           const dx = p.x - q.x;
+          if (dx > maxDist || dx < -maxDist) continue;
           const dy = p.y - q.y;
-          const dist = Math.hypot(dx, dy);
-          if (dist < maxDist) {
-            const alpha = (1 - dist / maxDist) * 0.25;
-            ctx.strokeStyle = `rgba(139,92,246,${alpha})`;
-            ctx.lineWidth = 0.8;
-            ctx.beginPath();
-            ctx.moveTo(p.x, p.y);
-            ctx.lineTo(q.x, q.y);
-            ctx.stroke();
-          }
+          if (dy > maxDist || dy < -maxDist) continue;
+          const distSq = dx * dx + dy * dy;
+          if (distSq >= maxDistSq) continue;
+          const alpha = (1 - Math.sqrt(distSq) / maxDist) * 0.25;
+          ctx.strokeStyle = `rgba(139,92,246,${alpha})`;
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(q.x, q.y);
+          ctx.stroke();
         }
       }
 
@@ -559,9 +636,9 @@ function useParticleCanvas(
         if (pointer.active) {
           const dx = p.x - pointer.x;
           const dy = p.y - pointer.y;
-          const dist = Math.hypot(dx, dy);
-          if (dist < 160) {
-            r = p.size + (1 - dist / 160) * 2;
+          const distSq = dx * dx + dy * dy;
+          if (distSq < 160 * 160) {
+            r = p.size + (1 - Math.sqrt(distSq) / 160) * 2;
             glow = true;
           }
         }
@@ -632,29 +709,36 @@ function MouseSpotlight() {
     let raf = 0;
 
     const onMove = (e: MouseEvent) => {
+      // No `+ window.scrollY` here: the spotlight is position:fixed, so its
+      // coordinates are viewport-relative. Adding the scroll offset pushed it
+      // permanently below the fold after ~700px of scrolling — the glow simply
+      // stopped following the cursor while its layer kept animating off-screen.
       targetX = e.clientX;
-      targetY = e.clientY + window.scrollY;
+      targetY = e.clientY;
+      if (!raf && !document.hidden) raf = requestAnimationFrame(animate);
     };
 
+    // Self-halting easing loop: runs only while there is distance left to
+    // close, then stops until the pointer moves again. Previously this span
+    // at 60fps for the entire session even with a completely idle mouse.
     const animate = () => {
-      if (document.hidden) {
+      raf = 0;
+      const dx = targetX - curX;
+      const dy = targetY - curY;
+      curX += dx * 0.08;
+      curY += dy * 0.08;
+      const el = spotRef.current;
+      if (el) el.style.transform = `translate3d(${curX - 300}px, ${curY - 300}px, 0)`;
+      if ((Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) && !document.hidden) {
         raf = requestAnimationFrame(animate);
-        return;
       }
-      curX += (targetX - curX) * 0.08;
-      curY += (targetY - curY) * 0.08;
-      if (spotRef.current) {
-        spotRef.current.style.transform = `translate(${curX - 300}px, ${curY - 300}px)`;
-      }
-      raf = requestAnimationFrame(animate);
     };
 
     window.addEventListener("mousemove", onMove, { passive: true });
-    raf = requestAnimationFrame(animate);
 
     return () => {
       window.removeEventListener("mousemove", onMove);
-      cancelAnimationFrame(raf);
+      if (raf) cancelAnimationFrame(raf);
     };
   }, []);
 
@@ -683,34 +767,77 @@ function MagneticButton({ children, className }: { children: React.ReactNode; cl
     const el = ref.current;
     if (!el) return;
     const finePointer = matchMedia("(pointer: fine)").matches;
-    if (!finePointer) return;
+    const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!finePointer || reduceMotion) return;
 
-    const onMove = (e: MouseEvent) => {
-      const rect = el.getBoundingClientRect();
+    // This is a window-level mousemove listener, so it fires for every pointer
+    // movement anywhere on the page for the whole session. It previously called
+    // getBoundingClientRect() on each of those events — a forced synchronous
+    // layout, per magnetic button, even while scrolled far past the hero.
+    // Now: the rect is cached and only re-measured on scroll/resize, the DOM
+    // write is rAF-batched, and the whole thing idles while off-screen.
+    let rect = el.getBoundingClientRect();
+    let onScreen = true;
+    let frame = 0;
+    let pointerX = 0;
+    let pointerY = 0;
+    let settled = true;
+
+    const measure = () => {
+      rect = el.getBoundingClientRect();
+    };
+
+    const apply = () => {
+      frame = 0;
       const cx = rect.left + rect.width / 2;
       const cy = rect.top + rect.height / 2;
-      const dx = e.clientX - cx;
-      const dy = e.clientY - cy;
+      const dx = pointerX - cx;
+      const dy = pointerY - cy;
       const dist = Math.hypot(dx, dy);
       const radius = 150;
       const strength = 12;
-      if (dist < radius) {
+      if (dist < radius && dist > 0) {
         const pull = 1 - dist / radius;
         el.style.transform = `translate3d(${(dx / dist) * strength * pull}px, ${(dy / dist) * strength * pull}px, 0)`;
-      } else {
+        settled = false;
+      } else if (!settled) {
+        // Only write the reset once, not on every distant mouse move.
         el.style.transform = "translate3d(0,0,0)";
+        settled = true;
       }
     };
 
-    const onLeave = () => {
-      el.style.transform = "translate3d(0,0,0)";
+    const onMove = (e: MouseEvent) => {
+      if (!onScreen) return;
+      pointerX = e.clientX;
+      pointerY = e.clientY;
+      if (!frame) frame = requestAnimationFrame(apply);
     };
 
+    const onScrollOrResize = () => {
+      if (!onScreen) return;
+      measure();
+    };
+
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        onScreen = entry.isIntersecting;
+        if (onScreen) measure();
+      },
+      { rootMargin: "200px" },
+    );
+    io.observe(el);
+
     window.addEventListener("mousemove", onMove, { passive: true });
-    el.addEventListener("mouseleave", onLeave);
+    window.addEventListener("scroll", onScrollOrResize, { passive: true });
+    window.addEventListener("resize", onScrollOrResize);
+
     return () => {
+      io.disconnect();
+      if (frame) cancelAnimationFrame(frame);
       window.removeEventListener("mousemove", onMove);
-      el.removeEventListener("mouseleave", onLeave);
+      window.removeEventListener("scroll", onScrollOrResize);
+      window.removeEventListener("resize", onScrollOrResize);
     };
   }, []);
 
@@ -777,9 +904,10 @@ function HeroSection() {
       const dx = (smoothX - 0.5) * 2;
       const dy = (smoothY - 0.5) * 2;
 
-      if (orb1Ref.current) orb1Ref.current.style.transform = `translate(${dx * 40}px, ${dy * 30}px)`;
-      if (orb2Ref.current) orb2Ref.current.style.transform = `translate(${dx * -30}px, ${dy * -25}px)`;
-      if (orb3Ref.current) orb3Ref.current.style.transform = `translate(${dx * 20}px, ${dy * 15}px)`;
+      if (orb1Ref.current) orb1Ref.current.style.transform = `translate3d(${dx * 40}px, ${dy * 30}px, 0)`;
+      if (orb2Ref.current) orb2Ref.current.style.transform = `translate3d(${dx * -30}px, ${dy * -25}px, 0)`;
+      // -50% keeps orb3 horizontally centred (see the note on its element).
+      if (orb3Ref.current) orb3Ref.current.style.transform = `translate(-50%, 0) translate3d(${dx * 20}px, ${dy * 15}px, 0)`;
 
       raf = requestAnimationFrame(animate);
     };
@@ -812,16 +940,21 @@ function HeroSection() {
       {/* Parallax Floating Orbs — move with mouse, capped to viewport */}
       <div
         ref={orb1Ref}
-        className="absolute top-[15%] left-[15%] w-[250px] h-[250px] md:w-[500px] md:h-[500px] bg-purple-600/20 rounded-full blur-[80px] md:blur-[120px] animate-pulse-glow pointer-events-none z-[1] will-change-transform"
+        className="absolute top-[15%] left-[15%] w-[250px] h-[250px] md:w-[500px] md:h-[500px] bg-purple-600/20 rounded-full blur-[50px] md:blur-[80px] animate-pulse-glow pointer-events-none z-[1] will-change-transform"
       />
       <div
         ref={orb2Ref}
-        className="absolute bottom-[15%] right-[15%] w-[200px] h-[200px] md:w-[400px] md:h-[400px] bg-indigo-600/20 rounded-full blur-[80px] md:blur-[100px] animate-pulse-glow pointer-events-none z-[1] will-change-transform"
+        className="absolute bottom-[15%] right-[15%] w-[200px] h-[200px] md:w-[400px] md:h-[400px] bg-indigo-600/20 rounded-full blur-[50px] md:blur-[70px] animate-pulse-glow pointer-events-none z-[1] will-change-transform"
         style={{ animationDelay: "1.5s" }}
       />
+      {/* No -translate-x-1/2 class here: the parallax loop writes an inline
+          `transform`, which beats the class and would silently drop the
+          centering, kicking this orb ~300px right. Centering is folded into
+          the transform the loop writes instead. */}
       <div
         ref={orb3Ref}
-        className="absolute top-[40%] left-[50%] -translate-x-1/2 w-[300px] h-[300px] md:w-[600px] md:h-[600px] bg-pink-600/10 rounded-full blur-[100px] md:blur-[150px] pointer-events-none z-[1] will-change-transform"
+        className="absolute top-[40%] left-[50%] w-[300px] h-[300px] md:w-[600px] md:h-[600px] bg-pink-600/10 rounded-full blur-[60px] md:blur-[100px] pointer-events-none z-[1] will-change-transform"
+        style={{ transform: "translate(-50%, 0)" }}
       />
 
       <motion.div
@@ -932,7 +1065,7 @@ function StatsBar() {
     <section id="stats" ref={ref} className="relative py-24 section-darker overflow-hidden">
       {/* Background effects */}
       <div className="absolute inset-0 bg-gradient-to-b from-transparent via-purple-500/5 to-transparent pointer-events-none" />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[350px] h-[200px] md:w-[900px] md:h-[400px] bg-purple-600/5 rounded-full blur-[80px] md:blur-[120px] pointer-events-none" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[350px] h-[200px] md:w-[900px] md:h-[400px] bg-purple-600/5 rounded-full blur-[48px] md:blur-[64px] pointer-events-none" />
 
       <div className="mx-auto max-w-[1200px] px-6 relative z-10">
         {/* Section heading */}
@@ -942,7 +1075,7 @@ function StatsBar() {
           transition={{ duration: 0.6 }}
           className="text-center mb-12"
         >
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-purple-500/20 bg-purple-500/10 backdrop-blur-sm mb-4">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-purple-500/20 bg-purple-500/10 mb-4">
             <div className="h-1.5 w-1.5 rounded-full bg-purple-400 animate-pulse" />
             <span className="text-xs font-semibold uppercase tracking-[0.2em] text-purple-300">
               Track Record
@@ -981,7 +1114,7 @@ function ServicesSection() {
 
   return (
     <section id="services" ref={ref} className="py-16 md:py-28 section-dark relative overflow-hidden">
-      <div className="absolute top-0 right-0 w-[300px] h-[300px] md:w-[600px] md:h-[600px] bg-purple-600/5 rounded-full blur-[80px] md:blur-[120px] pointer-events-none" />
+      <div className="absolute top-0 right-0 w-[300px] h-[300px] md:w-[600px] md:h-[600px] bg-purple-600/5 rounded-full blur-[48px] md:blur-[64px] pointer-events-none" />
 
       <motion.div
         initial="hidden"
@@ -1034,7 +1167,7 @@ function ProjectsSection() {
 
   return (
     <section id="projects" ref={ref} className="py-16 md:py-28 section-darker relative overflow-hidden">
-      <div className="absolute bottom-0 left-0 w-[250px] h-[250px] md:w-[500px] md:h-[500px] bg-indigo-600/5 rounded-full blur-[80px] md:blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-0 left-0 w-[250px] h-[250px] md:w-[500px] md:h-[500px] bg-indigo-600/5 rounded-full blur-[48px] md:blur-[64px] pointer-events-none" />
 
       <motion.div
         initial="hidden"
@@ -1159,7 +1292,7 @@ function AboutSection() {
 
   return (
     <section id="about" ref={ref} className="py-16 md:py-28 section-darker relative overflow-hidden">
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[350px] h-[350px] md:w-[800px] md:h-[800px] bg-gradient-to-r from-purple-600/5 to-indigo-600/5 rounded-full blur-[80px] md:blur-[120px] pointer-events-none" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[350px] h-[350px] md:w-[800px] md:h-[800px] bg-gradient-to-r from-purple-600/5 to-indigo-600/5 rounded-full blur-[48px] md:blur-[64px] pointer-events-none" />
 
       <motion.div
         initial="hidden"
@@ -1967,7 +2100,7 @@ function ContactSection() {
 
   return (
     <section id="contact" ref={ref} className="py-16 md:py-28 section-darker relative overflow-hidden">
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[350px] h-[200px] md:w-[800px] md:h-[400px] bg-gradient-to-b from-purple-600/10 to-transparent rounded-full blur-[80px] md:blur-[100px] pointer-events-none" />
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[350px] h-[200px] md:w-[800px] md:h-[400px] bg-gradient-to-b from-purple-600/10 to-transparent rounded-full blur-[48px] md:blur-[64px] pointer-events-none" />
 
       <motion.div
         initial="hidden"
@@ -2281,25 +2414,37 @@ function CustomCursor() {
     const ease = 0.18;
     let raf = 0;
 
+    // The cursor element is `display: none` unless the body carries
+    // .project-cursor-active (i.e. the pointer is over a project card), but the
+    // easing loop used to run for the entire session regardless — writing a
+    // transform to a hidden node 60 times a second. It now runs only while the
+    // cursor is actually visible, and halts as soon as it catches up.
+    let active = false;
+
+    const animate = () => {
+      raf = 0;
+      const dx = mouseX - curX;
+      const dy = mouseY - curY;
+      curX += dx * ease;
+      curY += dy * ease;
+      el.style.transform = `translate3d(${curX - 28}px,${curY - 28}px,0)`;
+      if (active && !document.hidden && (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5)) {
+        raf = requestAnimationFrame(animate);
+      }
+    };
+
+    const kick = () => {
+      if (active && !raf && !document.hidden) raf = requestAnimationFrame(animate);
+    };
+
     const onMove = (e: MouseEvent) => {
       mouseX = e.clientX;
       mouseY = e.clientY;
       if (curX === -9999) { curX = mouseX; curY = mouseY; }
+      kick();
     };
     const onDown = () => el.classList.add("clicking");
     const onUp = () => el.classList.remove("clicking");
-
-    const animate = () => {
-      if (document.hidden) {
-        raf = requestAnimationFrame(animate);
-        return;
-      }
-      curX += (mouseX - curX) * ease;
-      curY += (mouseY - curY) * ease;
-      el.style.transform = `translate(${curX - 28}px,${curY - 28}px)`;
-      raf = requestAnimationFrame(animate);
-    };
-    raf = requestAnimationFrame(animate);
 
     const onLeaveWindow = (e: MouseEvent) => {
       if (!(e as any).relatedTarget && !(e as any).toElement) el.style.opacity = "0";
@@ -2312,8 +2457,19 @@ function CustomCursor() {
     window.addEventListener("mouseout", onLeaveWindow as any);
     window.addEventListener("mouseover", onEnterWindow);
 
-    const activate = () => document.body.classList.add("project-cursor-active");
-    const deactivate = () => document.body.classList.remove("project-cursor-active");
+    const activate = () => {
+      active = true;
+      document.body.classList.add("project-cursor-active");
+      // Jump straight to the pointer so it doesn't slide in from its last spot.
+      curX = mouseX;
+      curY = mouseY;
+      kick();
+    };
+    const deactivate = () => {
+      active = false;
+      document.body.classList.remove("project-cursor-active");
+      if (raf) { cancelAnimationFrame(raf); raf = 0; }
+    };
     const cards = Array.from(document.querySelectorAll<HTMLElement>(".project-card"));
     cards.forEach((c) => {
       c.addEventListener("mouseenter", activate);
@@ -2321,7 +2477,7 @@ function CustomCursor() {
     });
 
     return () => {
-      cancelAnimationFrame(raf);
+      if (raf) cancelAnimationFrame(raf);
       window.removeEventListener("mousemove", onMove as any);
       window.removeEventListener("mousedown", onDown);
       window.removeEventListener("mouseup", onUp);

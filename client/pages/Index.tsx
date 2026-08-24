@@ -103,8 +103,8 @@ const services = [
   },
   {
     icon: <Sparkles className="h-6 w-6" />,
-    title: "AI Agents & API Integration",
-    desc: "Building intelligent AI agents, LLM-powered workflows, and API integrations that automate processes and supercharge business operations.",
+    title: "AI Integrations & Automation",
+    desc: "LLM-powered features and workflows — Gemini and other AI APIs, intelligent agents, and process automation that saves businesses real hours.",
     color: "from-amber-500 to-orange-400",
   },
 ];
@@ -126,9 +126,11 @@ const techStack = [
 
 const stats = [
   { value: "20+", label: "Projects Delivered", color: "from-blue-500 to-cyan-400" },
-  { value: "1+", label: "Years Experience", color: "from-violet-500 to-purple-400" },
+  { value: "1.5+", label: "Years Experience", color: "from-violet-500 to-purple-400" },
   { value: "15+", label: "Happy Clients", color: "from-pink-500 to-rose-400" },
-  { value: "99%", label: "Client Satisfaction", color: "from-amber-500 to-orange-400" },
+  // Countable fact (the 12 tools in the stack marquee) — replaced an
+  // unverifiable "99% Client Satisfaction" claim.
+  { value: "12+", label: "Technologies Used", color: "from-amber-500 to-orange-400" },
 ];
 
 /* ═══════════════════════════════════════════════
@@ -898,9 +900,9 @@ function HeroSection() {
           transition={{ duration: 0.6, delay: 0.7 }}
           className="text-lg md:text-xl text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed"
         >
-          Full-stack developer crafting high-performance web applications with
-          React, Laravel, and AI-powered workflows. Turning complex ideas into
-          elegant, scalable solutions.
+          I build production-ready web and mobile applications with React,
+          Laravel, Flutter, Firebase, and AI-powered workflows — from business
+          websites and admin platforms to full mobile products.
         </motion.p>
 
         <motion.div
@@ -1083,8 +1085,9 @@ function ProjectsSection() {
             </SectionTitle>
           </div>
           <motion.p variants={fadeUp} className="text-slate-400 max-w-md text-[15px]">
-            Showcasing personal projects I fully own. Client work under NDA is
-            not displayed. All trademarks respected.
+            Selected public work, shown with permission. Client and NDA
+            projects are intentionally not displayed — ask me about them
+            directly.
           </motion.p>
         </div>
 
@@ -1252,10 +1255,11 @@ function AboutSection() {
 
             <motion.p variants={fadeUp} className="text-slate-400 leading-relaxed text-[15px]">
               I'm an Information Technology graduate from Anuradha Engineering
-              College, Chikhli (Maharashtra, India). I build web platforms with
-              WordPress, Laravel, and React, and now I'm focused on Flutter
-              mobile apps with Firebase, AI agents, and React-based admin panels
-              — using tools like ChatGPT, Claude, and GitHub Copilot to ship
+              College (Maharashtra, India), now based in Indore. I build
+              production web and mobile applications — WordPress and Laravel
+              platforms, React admin panels, and Flutter apps backed by
+              Firebase — and integrate AI (Gemini, LLM APIs) into real product
+              workflows, using tools like Claude and GitHub Copilot to ship
               fast.
             </motion.p>
 
@@ -1355,7 +1359,7 @@ const KNOWLEDGE_BASE: {
   {
     keywords: ["where", "location", "city", "from where", "based in", "live", "country", "india", "state"],
     synonyms: ["hometown", "place", "region"],
-    reply: "📍 Bhushan is from **Chikhli**, a town in Buldana district, **Maharashtra, India**. He works remotely and is open to collaborating with clients globally.",
+    reply: "📍 Bhushan is based in **Indore, Madhya Pradesh, India** (originally from Chikhli, Maharashtra). He works remotely and is open to collaborating with clients globally.",
     chips: ["What's his education?", "Is he open to remote work?"],
     topic: "location",
   },
@@ -1759,9 +1763,9 @@ function ChatSection() {
               Ask My <span className="gradient-text">Digital Twin.</span>
             </SectionTitle>
             <motion.p variants={fadeUp} className="text-slate-400 text-[15px] leading-relaxed">
-              Powered by a smart NLP engine trained on Bhushan's complete
-              profile. Ask naturally — it understands context, handles
-              follow-ups, and even corrects typos.
+              An AI assistant configured with Bhushan's professional profile —
+              skills, projects, and experience. Ask naturally — it understands
+              context, handles follow-ups, and even corrects typos.
             </motion.p>
             <motion.div variants={fadeUp} className="hidden lg:flex flex-wrap gap-2">
               {["Skills", "Projects", "Experience", "Contact", "Flutter", "AI Agents"].map((t) => (
@@ -2197,7 +2201,7 @@ function Footer() {
               Bhushan<span className="text-purple-400">.</span>
             </a>
             <p className="text-sm text-slate-500">
-              Building the web, one pixel at a time.
+              Building reliable software across web, mobile, and AI.
             </p>
           </div>
 

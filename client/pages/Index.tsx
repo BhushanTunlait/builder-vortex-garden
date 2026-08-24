@@ -33,6 +33,29 @@ import {
 import { cn } from "@/lib/utils";
 
 /* ═══════════════════════════════════════════════
+   DEVICE CAPABILITY TIER
+   ═══════════════════════════════════════════════ */
+
+/** True on devices that shouldn't pay for decorative effects: ≤4GB RAM,
+ *  ≤4 CPU cores, Data-Saver on, or a 2g/3g connection. deviceMemory and
+ *  connection are Chrome-only — absent values count as capable, so Safari
+ *  and Firefox keep the full experience. Evaluated once at module load;
+ *  single definition of "is this a low-end device" for the whole app. */
+const LOW_END =
+  typeof navigator !== "undefined" &&
+  (((navigator as { deviceMemory?: number }).deviceMemory ?? 8) <= 4 ||
+    (navigator.hardwareConcurrency ?? 8) <= 4 ||
+    (navigator as { connection?: { saveData?: boolean; effectiveType?: string } })
+      .connection?.saveData === true ||
+    /\b(slow-2g|2g|3g)\b/.test(
+      (navigator as { connection?: { effectiveType?: string } }).connection
+        ?.effectiveType ?? "",
+    ) ||
+    // Debug/preview override: append ?lite to the URL to see the low-end
+    // experience on any device.
+    new URLSearchParams(window.location.search).has("lite"));
+
+/* ═══════════════════════════════════════════════
    DATA
    ═══════════════════════════════════════════════ */
 
@@ -421,6 +444,7 @@ function TiltCard({
   const pendingRef = useRef({ x: 0, y: 0 });
 
   const onEnter = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (LOW_END) return; // tilt stays off — onMove no-ops without a rect
     const el = ref.current;
     if (!el) return;
     rectRef.current = el.getBoundingClientRect();
@@ -531,7 +555,9 @@ function useParticleCanvas(
 
       const area = width * height;
       const base = Math.round(area * 0.00004);
-      const count = Math.max(35, Math.min(60, base));
+      // Low-end devices draw a sparser field — it's a one-time draw either
+      // way, but fewer arcs/lines also makes any later hover sim cheaper.
+      const count = Math.max(25, Math.min(LOW_END ? 40 : 60, base));
       particles = Array.from({ length: count }, () => ({
         x: rand(0, width),
         y: rand(0, height),
@@ -677,7 +703,8 @@ function useParticleCanvas(
     resize();
     drawFrame(); // the one unconditional draw — the idle hero costs nothing after this
     window.addEventListener("resize", onResize);
-    if (!reduceMotion && finePointer) {
+    // Low-end devices keep the static constellation but never run the sim.
+    if (!reduceMotion && finePointer && !LOW_END) {
       container.addEventListener("mouseenter", onEnter);
       container.addEventListener("mouseleave", onLeave);
       container.addEventListener("mousemove", onMove);
@@ -705,7 +732,7 @@ function MagneticButton({ children, className }: { children: React.ReactNode; cl
     if (!el) return;
     const finePointer = matchMedia("(pointer: fine)").matches;
     const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (!finePointer || reduceMotion) return;
+    if (!finePointer || reduceMotion || LOW_END) return;
 
     // This is a window-level mousemove listener, so it fires for every pointer
     // movement anywhere on the page for the whole session. It previously called
@@ -823,10 +850,12 @@ function HeroSection() {
       <div className="absolute inset-0 animated-grid z-[1]" />
 
       {/* Floating Orbs — pure CSS, opacity-only pulse on the compositor.
-          No refs, no JS transforms; orb3 centres itself with the class again. */}
-      <div className="absolute top-[15%] left-[15%] w-[250px] h-[250px] md:w-[500px] md:h-[500px] bg-purple-600/20 rounded-full blur-[50px] md:blur-[80px] animate-pulse-glow pointer-events-none z-[1]" />
+          No refs, no JS transforms; orb3 centres itself with the class again.
+          Low-end devices get static orbs: even compositor-only animation on a
+          blurred layer costs composite time a 2GB phone doesn't have. */}
+      <div className={cn("absolute top-[15%] left-[15%] w-[250px] h-[250px] md:w-[500px] md:h-[500px] bg-purple-600/20 rounded-full blur-[50px] md:blur-[80px] pointer-events-none z-[1]", !LOW_END && "animate-pulse-glow")} />
       <div
-        className="absolute bottom-[15%] right-[15%] w-[200px] h-[200px] md:w-[400px] md:h-[400px] bg-indigo-600/20 rounded-full blur-[50px] md:blur-[70px] animate-pulse-glow pointer-events-none z-[1]"
+        className={cn("absolute bottom-[15%] right-[15%] w-[200px] h-[200px] md:w-[400px] md:h-[400px] bg-indigo-600/20 rounded-full blur-[50px] md:blur-[70px] pointer-events-none z-[1]", !LOW_END && "animate-pulse-glow")}
         style={{ animationDelay: "1.5s" }}
       />
       <div className="absolute top-[40%] left-[50%] -translate-x-1/2 w-[300px] h-[300px] md:w-[600px] md:h-[600px] bg-pink-600/10 rounded-full blur-[60px] md:blur-[100px] pointer-events-none z-[1]" />
@@ -1131,12 +1160,21 @@ function TechStackSection() {
         </motion.h2>
       </motion.div>
 
+      {/* Low-end devices get a static wrapped grid — all 12 chips visible,
+          no continuously-translating layer for a weak GPU to recomposite. */}
       <div className="relative">
-        <div className="absolute left-0 top-0 bottom-0 w-32 bg-gradient-to-r from-[#030014] to-transparent z-10 pointer-events-none" />
-        <div className="absolute right-0 top-0 bottom-0 w-32 bg-gradient-to-l from-[#030014] to-transparent z-10 pointer-events-none" />
+        {!LOW_END && (
+          <>
+            <div className="absolute left-0 top-0 bottom-0 w-32 bg-gradient-to-r from-[#030014] to-transparent z-10 pointer-events-none" />
+            <div className="absolute right-0 top-0 bottom-0 w-32 bg-gradient-to-l from-[#030014] to-transparent z-10 pointer-events-none" />
+          </>
+        )}
 
-        <div className="flex animate-marquee" style={{ width: "max-content" }}>
-          {doubled.map((t, i) => (
+        <div
+          className={LOW_END ? "flex flex-wrap justify-center gap-y-3 px-6 max-w-[1200px] mx-auto" : "flex animate-marquee"}
+          style={LOW_END ? undefined : { width: "max-content" }}
+        >
+          {(LOW_END ? techStack : doubled).map((t, i) => (
             <div
               key={`${t.name}-${i}`}
               className="flex-shrink-0 mx-3 px-6 py-4 rounded-xl glass border border-white/5 flex items-center gap-3 hover:border-purple-500/30 transition-all duration-300 group cursor-default"
@@ -1184,7 +1222,7 @@ function AboutSection() {
                   alt="Bhushan Tunlait"
                   loading="lazy"
                   decoding="async"
-                  className="h-full w-full object-contain animate-breathing-human"
+                  className={cn("h-full w-full object-contain", !LOW_END && "animate-breathing-human")}
                   draggable={false}
                 />
               </div>

@@ -251,6 +251,43 @@
     contain-intrinsic-size: auto 800px;
   }
 
+  /* ─── Soft glow blobs ───
+     These replace `filter: blur(48-100px)` divs. A blurred div forces the
+     compositor to keep (and re-composite every scroll frame) a filtered
+     layer; a radial gradient paints the identical soft blob once and costs
+     nothing afterwards. `ellipse` so non-square blobs scale to their box. */
+  .blob-purple {
+    background: radial-gradient(ellipse at center, rgba(147, 51, 234, 0.26) 0%, rgba(147, 51, 234, 0.10) 45%, transparent 68%);
+  }
+  .blob-indigo {
+    background: radial-gradient(ellipse at center, rgba(79, 70, 229, 0.26) 0%, rgba(79, 70, 229, 0.10) 45%, transparent 68%);
+  }
+  .blob-pink {
+    background: radial-gradient(ellipse at center, rgba(219, 39, 119, 0.14) 0%, transparent 68%);
+  }
+  .blob-purple-faint {
+    background: radial-gradient(ellipse at center, rgba(147, 51, 234, 0.09) 0%, transparent 68%);
+  }
+  .blob-indigo-faint {
+    background: radial-gradient(ellipse at center, rgba(79, 70, 229, 0.09) 0%, transparent 68%);
+  }
+  .blob-glow-ring {
+    background: radial-gradient(ellipse at center, rgba(147, 51, 234, 0.55) 0%, rgba(99, 102, 241, 0.35) 45%, transparent 70%);
+  }
+
+  /* ─── Runtime performance demotion ───
+     .perf-lite lands on <html> when the FPS probe (or a persisted flag)
+     detects the machine can't hold a smooth frame rate: the remaining
+     infinite animations stop, everything else stays identical. */
+  .perf-lite .animate-pulse-glow,
+  .perf-lite .animate-breathing-human,
+  .perf-lite .animate-bounce-subtle {
+    animation: none !important;
+  }
+  .perf-lite .animate-marquee {
+    animation-play-state: paused !important;
+  }
+
   /* ─── Section Backgrounds ─── */
   .section-dark {
     background: linear-gradient(180deg, #030014 0%, #0a0118 50%, #030014 100%);

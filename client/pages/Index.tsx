@@ -53,7 +53,76 @@ const LOW_END =
     ) ||
     // Debug/preview override: append ?lite to the URL to see the low-end
     // experience on any device.
-    new URLSearchParams(window.location.search).has("lite"));
+    new URLSearchParams(window.location.search).has("lite") ||
+    // A previous visit's FPS probe found this machine can't hold a smooth
+    // frame rate — stay in lite from the start instead of re-detecting.
+    (() => {
+      try {
+        return localStorage.getItem("perf-lite") === "1";
+      } catch {
+        return false;
+      }
+    })());
+
+/** True once this session has been demoted to lite — either statically
+ *  (LOW_END) or live by the FPS probe below. Checked by the pointer-effect
+ *  handlers, which run after demotion can happen. */
+const isPerfLite = () =>
+  LOW_END || document.documentElement.classList.contains("perf-lite");
+
+/** Measures real frame pacing after the entrance animations settle. If the
+ *  machine can't hold ~45fps while idle, adds .perf-lite to <html> (CSS stops
+ *  the remaining infinite animations) and persists the flag so future visits
+ *  start lite immediately. Specs lie — a 16GB laptop on battery saver or with
+ *  40 tabs open janks like a budget phone; this measures what's actually
+ *  happening on THIS machine, right now. */
+function usePerfProbe() {
+  useEffect(() => {
+    if (LOW_END) {
+      document.documentElement.classList.add("perf-lite");
+      return;
+    }
+
+    let raf = 0;
+    let cancelled = false;
+
+    // Wait out page-entry animations, then sample ~1s of frames.
+    const timer = setTimeout(() => {
+      if (document.hidden) return; // hidden tabs suspend rAF — no valid signal
+      const deltas: number[] = [];
+      let prev = performance.now();
+
+      const sample = (now: number) => {
+        if (cancelled) return;
+        deltas.push(now - prev);
+        prev = now;
+        if (deltas.length < 60) {
+          raf = requestAnimationFrame(sample);
+          return;
+        }
+        // Median frame time — robust against one-off GC/paint spikes.
+        deltas.sort((a, b) => a - b);
+        const median = deltas[Math.floor(deltas.length / 2)];
+        if (median > 22 && !document.hidden) {
+          // Sustained <45fps while idle: this machine needs the lite tier.
+          document.documentElement.classList.add("perf-lite");
+          try {
+            localStorage.setItem("perf-lite", "1");
+          } catch {
+            /* storage unavailable — session-only demotion still applies */
+          }
+        }
+      };
+      raf = requestAnimationFrame(sample);
+    }, 3500);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
+}
 
 /* ═══════════════════════════════════════════════
    DATA
@@ -337,9 +406,17 @@ function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
-    const handler = () => setScrolled(window.scrollY > 50);
+    // setState only when actually crossing the threshold, not per scroll event.
+    let last = window.scrollY > 50;
+    setScrolled(last);
+    const handler = () => {
+      const now = window.scrollY > 50;
+      if (now !== last) {
+        last = now;
+        setScrolled(now);
+      }
+    };
     window.addEventListener("scroll", handler, { passive: true });
-    handler();
     return () => window.removeEventListener("scroll", handler);
   }, []);
 
@@ -351,7 +428,7 @@ function Navbar() {
       className={cn(
         "fixed top-0 left-0 right-0 z-[100] transition-all duration-500",
         scrolled
-          ? "py-3 bg-black/70 backdrop-blur-md border-b border-white/5 shadow-[0_4px_30px_rgba(0,0,0,0.3)]"
+          ? "py-3 bg-[#05020e]/95 border-b border-white/5 shadow-[0_4px_30px_rgba(0,0,0,0.3)]"
           : "py-5 bg-transparent"
       )}
     >
@@ -446,7 +523,7 @@ function TiltCard({
   const pendingRef = useRef({ x: 0, y: 0 });
 
   const onEnter = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (LOW_END) return; // tilt stays off — onMove no-ops without a rect
+    if (isPerfLite()) return; // tilt stays off — onMove no-ops without a rect
     const el = ref.current;
     if (!el) return;
     rectRef.current = el.getBoundingClientRect();
@@ -686,6 +763,7 @@ function useParticleCanvas(
     // getBoundingClientRect() in a mousemove handler is a forced layout.
     let containerRect: DOMRect | null = null;
     const onEnter = () => {
+      if (isPerfLite()) return; // static frame only once demoted
       containerRect = container.getBoundingClientRect();
       pointer.active = true;
       if (!rafId) rafId = requestAnimationFrame(step);
@@ -774,7 +852,7 @@ function MagneticButton({ children, className }: { children: React.ReactNode; cl
     };
 
     const onMove = (e: MouseEvent) => {
-      if (!onScreen) return;
+      if (!onScreen || isPerfLite()) return;
       pointerX = e.clientX;
       pointerY = e.clientY;
       if (!frame) frame = requestAnimationFrame(apply);
@@ -855,12 +933,12 @@ function HeroSection() {
           No refs, no JS transforms; orb3 centres itself with the class again.
           Low-end devices get static orbs: even compositor-only animation on a
           blurred layer costs composite time a 2GB phone doesn't have. */}
-      <div className={cn("absolute top-[15%] left-[15%] w-[250px] h-[250px] md:w-[500px] md:h-[500px] bg-purple-600/20 rounded-full blur-[50px] md:blur-[80px] pointer-events-none z-[1]", !LOW_END && "animate-pulse-glow")} />
+      <div className={cn("absolute top-[15%] left-[15%] w-[250px] h-[250px] md:w-[500px] md:h-[500px] blob-purple pointer-events-none z-[1]", !LOW_END && "animate-pulse-glow")} />
       <div
-        className={cn("absolute bottom-[15%] right-[15%] w-[200px] h-[200px] md:w-[400px] md:h-[400px] bg-indigo-600/20 rounded-full blur-[50px] md:blur-[70px] pointer-events-none z-[1]", !LOW_END && "animate-pulse-glow")}
+        className={cn("absolute bottom-[15%] right-[15%] w-[200px] h-[200px] md:w-[400px] md:h-[400px] blob-indigo pointer-events-none z-[1]", !LOW_END && "animate-pulse-glow")}
         style={{ animationDelay: "1.5s" }}
       />
-      <div className="absolute top-[40%] left-[50%] -translate-x-1/2 w-[300px] h-[300px] md:w-[600px] md:h-[600px] bg-pink-600/10 rounded-full blur-[60px] md:blur-[100px] pointer-events-none z-[1]" />
+      <div className="absolute top-[40%] left-[50%] -translate-x-1/2 w-[300px] h-[300px] md:w-[600px] md:h-[600px] blob-pink pointer-events-none z-[1]" />
 
       <div className="relative z-10 mx-auto max-w-[1200px] px-5 sm:px-6 py-20 md:py-32 text-center">
         <motion.div
@@ -967,7 +1045,7 @@ function StatsBar() {
     <section id="stats" ref={ref} className="cv-auto relative py-24 section-darker overflow-hidden">
       {/* Background effects */}
       <div className="absolute inset-0 bg-gradient-to-b from-transparent via-purple-500/5 to-transparent pointer-events-none" />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[350px] h-[200px] md:w-[900px] md:h-[400px] bg-purple-600/5 rounded-full blur-[48px] md:blur-[64px] pointer-events-none" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[350px] h-[200px] md:w-[900px] md:h-[400px] blob-purple-faint pointer-events-none" />
 
       <div className="mx-auto max-w-[1200px] px-6 relative z-10">
         {/* Section heading */}
@@ -1016,7 +1094,7 @@ function ServicesSection() {
 
   return (
     <section id="services" ref={ref} className="cv-auto py-16 md:py-28 section-dark relative overflow-hidden">
-      <div className="absolute top-0 right-0 w-[300px] h-[300px] md:w-[600px] md:h-[600px] bg-purple-600/5 rounded-full blur-[48px] md:blur-[64px] pointer-events-none" />
+      <div className="absolute top-0 right-0 w-[300px] h-[300px] md:w-[600px] md:h-[600px] blob-purple-faint pointer-events-none" />
 
       <motion.div
         initial="hidden"
@@ -1069,7 +1147,7 @@ function ProjectsSection() {
 
   return (
     <section id="projects" ref={ref} className="cv-auto py-16 md:py-28 section-darker relative overflow-hidden">
-      <div className="absolute bottom-0 left-0 w-[250px] h-[250px] md:w-[500px] md:h-[500px] bg-indigo-600/5 rounded-full blur-[48px] md:blur-[64px] pointer-events-none" />
+      <div className="absolute bottom-0 left-0 w-[250px] h-[250px] md:w-[500px] md:h-[500px] blob-indigo-faint pointer-events-none" />
 
       <motion.div
         initial="hidden"
@@ -1204,7 +1282,7 @@ function AboutSection() {
 
   return (
     <section id="about" ref={ref} className="cv-auto py-16 md:py-28 section-darker relative overflow-hidden">
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[350px] h-[350px] md:w-[800px] md:h-[800px] bg-gradient-to-r from-purple-600/5 to-indigo-600/5 rounded-full blur-[48px] md:blur-[64px] pointer-events-none" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[350px] h-[350px] md:w-[800px] md:h-[800px] blob-purple-faint pointer-events-none" />
 
       <motion.div
         initial="hidden"
@@ -1217,7 +1295,7 @@ function AboutSection() {
           <motion.div variants={scaleIn} className="flex justify-center">
             <TiltCard className="relative group">
               {/* Glow Ring */}
-              <div className="absolute -inset-4 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-full opacity-20 blur-2xl group-hover:opacity-40 transition-opacity duration-700" />
+              <div className="absolute -inset-4 blob-glow-ring rounded-full opacity-40 group-hover:opacity-70 transition-opacity duration-700" />
 
               <div className="relative h-48 w-48 sm:h-56 sm:w-56 md:h-64 md:w-64 lg:h-80 lg:w-80 rounded-full overflow-hidden border-2 border-purple-500/30 shadow-[0_0_60px_rgba(139,92,246,0.2)]">
                 <img
@@ -2017,7 +2095,7 @@ function ContactSection() {
 
   return (
     <section id="contact" ref={ref} className="cv-auto py-16 md:py-28 section-darker relative overflow-hidden">
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[350px] h-[200px] md:w-[800px] md:h-[400px] bg-gradient-to-b from-purple-600/10 to-transparent rounded-full blur-[48px] md:blur-[64px] pointer-events-none" />
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[350px] h-[200px] md:w-[800px] md:h-[400px] blob-purple-faint pointer-events-none" />
 
       <motion.div
         initial="hidden"
@@ -2267,9 +2345,17 @@ function FloatingButtons() {
   const [showScrollTop, setShowScrollTop] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setShowScrollTop(window.scrollY > 400);
+    // setState only on threshold crossings, not per scroll event.
+    let last = window.scrollY > 400;
+    setShowScrollTop(last);
+    const onScroll = () => {
+      const now = window.scrollY > 400;
+      if (now !== last) {
+        last = now;
+        setShowScrollTop(now);
+      }
+    };
     window.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
@@ -2424,6 +2510,7 @@ function CustomCursor() {
    ═══════════════════════════════════════════════ */
 
 export default function Index() {
+  usePerfProbe();
   return (
     <main className="min-h-screen flex flex-col bg-[#030014] relative">
       <Navbar />

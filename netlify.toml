@@ -13,3 +13,10 @@
   from = "/api/*"
   status = 200
   to = "/.netlify/functions/api/:splat"
+
+# SPA fallback — client-side routes (e.g. the unlisted /work-* page) must
+# resolve to index.html on a direct visit or Netlify returns a 404.
+[[redirects]]
+  from = "/*"
+  status = 200
+  to = "/index.html"

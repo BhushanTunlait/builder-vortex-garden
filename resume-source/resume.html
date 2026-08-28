@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bhushan Tunlait — Resume</title>
+<style>
+  /* Local variable font — no network dependency, prints reliably headless */
+  @font-face {
+    font-family: "Space Grotesk";
+    src: url("space-grotesk-latin-wght-normal.woff2") format("woff2-variations");
+    font-weight: 300 700;
+    font-display: block;
+  }
+  @page { size: A4; margin: 0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --accent: #6d28d9;
+    --accent-soft: #f3eefe;
+    --ink: #16121f;
+    --muted: #6b6577;
+    --line: #e8e4f0;
+  }
+  body {
+    font-family: "Inter", "Segoe UI", Arial, sans-serif;
+    color: var(--ink); font-size: 10pt; line-height: 1.4;
+    width: 210mm; padding: 0;
+  }
+  /* Brand band — echoes the portfolio's purple identity */
+  .band { height: 5mm; background: linear-gradient(90deg, #7c3aed 0%, #6366f1 55%, #a855f7 100%); }
+  .page { padding: 8mm 15mm 9mm; }
+
+  .wordmark {
+    font-family: "Space Grotesk", "Inter", sans-serif;
+    font-size: 23pt; font-weight: 700; letter-spacing: -0.6px;
+  }
+  .wordmark .dot { color: var(--accent); }
+  .role {
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 10.5pt; color: var(--accent); font-weight: 600;
+    letter-spacing: 0.2px; margin-top: 1px;
+  }
+  .contact { margin-top: 5px; font-size: 8.6pt; color: var(--muted); }
+  .contact a { color: var(--ink); text-decoration: none; font-weight: 500; }
+  .contact span + span::before { content: "  ·  "; color: #c5bfd4; }
+
+  h2 {
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 9.6pt; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1.6px; color: var(--ink);
+    display: flex; align-items: center; gap: 7px;
+    margin: 11px 0 6px;
+  }
+  h2::before {
+    content: ""; width: 14px; height: 3.2px; border-radius: 2px;
+    background: var(--accent); flex: none;
+  }
+  h2::after {
+    content: ""; flex: 1; height: 1px; background: var(--line);
+  }
+
+  p, li { color: #2c2537; }
+  ul { padding-left: 15px; }
+  li { margin-bottom: 2.5px; }
+  li::marker { color: var(--accent); }
+
+  .job-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .job-title { font-weight: 700; font-size: 10.4pt; font-family: "Space Grotesk", sans-serif; letter-spacing: -0.1px; }
+  .job-meta {
+    font-size: 8.2pt; color: var(--accent); font-weight: 600;
+    background: var(--accent-soft); border-radius: 99px; padding: 1.5px 9px;
+  }
+
+  .proj { margin-bottom: 6px; }
+  .proj-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .proj-name { font-weight: 700; font-size: 9.9pt; font-family: "Space Grotesk", sans-serif; letter-spacing: -0.1px; }
+  .tags { display: flex; gap: 4px; flex: none; }
+  .tag {
+    font-size: 7.1pt; font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase;
+    color: var(--accent); background: var(--accent-soft);
+    border: 1px solid #e2d8f8; border-radius: 99px; padding: 1px 7px; white-space: nowrap;
+  }
+  .proj p { font-size: 9.2pt; color: #443c52; margin-top: 1px; }
+
+  .skills-grid { display: grid; grid-template-columns: 108px 1fr; row-gap: 2.5px; font-size: 9.2pt; }
+  .skills-grid b { color: var(--ink); font-weight: 600; }
+  .skills-grid span { color: #443c52; }
+
+  .edu { display: flex; justify-content: space-between; font-size: 9.2pt; margin-bottom: 2.5px; }
+  .edu b { font-weight: 600; }
+  .muted { color: var(--muted); font-size: 8.6pt; }
+</style>
+</head>
+<body>
+  <div class="band"></div>
+  <div class="page">
+
+    <div class="wordmark">Bhushan Tunlait<span class="dot">.</span></div>
+    <div class="role">Software Engineer — Full-Stack · Flutter · AI Integrations</div>
+    <div class="contact">
+      <span>Indore, Madhya Pradesh, India</span><span>+91 9158856817</span><span><a href="mailto:bhushantunlait111@gmail.com">bhushantunlait111@gmail.com</a></span><br>
+      <span><a href="https://bhushantunlait.netlify.app">bhushantunlait.netlify.app</a></span><span><a href="https://github.com/BhushanTunlait">github.com/BhushanTunlait</a></span><span><a href="https://www.linkedin.com/in/bhushan-tunlait-250105173/">linkedin.com/in/bhushan-tunlait-250105173</a></span>
+    </div>
+
+    <h2>Profile</h2>
+    <p>
+      Software engineer with 1.5+ years of production experience building web and mobile
+      applications end to end — Flutter apps backed by Firebase, React admin panels, and
+      Laravel/WordPress platforms — with hands-on AI integration work (Gemini and other LLM APIs)
+      in real product workflows. Comfortable owning features from requirements through deployment,
+      debugging live systems, and communicating directly with stakeholders.
+    </p>
+
+    <h2>Experience</h2>
+    <div class="job-head">
+      <span class="job-title">Associate Software Engineer — Vibe6 Digital LLP</span>
+      <span class="job-meta">Jan 2025 – Present</span>
+    </div>
+    <ul style="margin-top:4px">
+      <li>Built cross-platform mobile applications with <b>Flutter &amp; Dart</b> on <b>Firebase</b> — authentication, Firestore real-time data, Cloud Functions, and push notifications.</li>
+      <li>Developed <b>React admin panels</b> (TailwindCSS, role-based access, live dashboards) and <b>Laravel/WordPress</b> web platforms, including e-commerce with payment integration.</li>
+      <li>Integrated <b>AI/LLM APIs (Gemini)</b> into product features and internal automation workflows.</li>
+      <li>Built data-automation pipelines: web scraping and multilingual data processing in <b>Python</b>.</li>
+      <li>Handled deployments (Firebase, Netlify, VPS), production debugging, and Play Store release preparation; managed work with Git and Agile sprints.</li>
+    </ul>
+
+    <h2>Selected Projects</h2>
+    <div class="proj">
+      <div class="proj-head"><span class="proj-name">My Ocean Basket — E-commerce Platform</span>
+        <span class="tags"><span class="tag">Flutter</span><span class="tag">Firebase</span><span class="tag">React</span><span class="tag">Razorpay</span></span></div>
+      <p>Customer shopping app with real-time inventory and order tracking, plus a React admin panel for catalogue, orders, and delivery workflows.</p>
+    </div>
+    <div class="proj">
+      <div class="proj-head"><span class="proj-name">Guidance Guru — AI Career-Guidance Platform</span>
+        <span class="tags"><span class="tag">Flutter</span><span class="tag">Firebase</span><span class="tag">Gemini API</span></span></div>
+      <p>Multi-role platform (students, parents, counsellors) with AI-assisted career recommendations, real-time chat, and counsellor scheduling.</p>
+    </div>
+    <div class="proj">
+      <div class="proj-head"><span class="proj-name">BioMax Attendance — Biometric HRMS</span>
+        <span class="tags"><span class="tag">Firebase</span><span class="tag">IoT</span><span class="tag">React</span><span class="tag">Cloud Functions</span></span></div>
+      <p>Biometric device integration synced to a cloud pipeline: attendance capture, payroll-ready reporting, and a live admin dashboard.</p>
+    </div>
+    <div class="proj">
+      <div class="proj-head"><span class="proj-name">Bharat Lakshya — Government-Scheme Data Platform</span>
+        <span class="tags"><span class="tag">Python</span><span class="tag">Scraping</span><span class="tag">Multilingual</span></span></div>
+      <p>Automated collection and multilingual processing of government scheme data into a structured, searchable dataset.</p>
+    </div>
+    <div class="proj">
+      <div class="proj-head"><span class="proj-name">Gold Prediction / Confluence — Market Analysis</span>
+        <span class="tags"><span class="tag">Python</span><span class="tag">ML</span><span class="tag">Market Data</span></span></div>
+      <p>Price-prediction and confluence-signal system built on live market data feeds and order-flow analysis.</p>
+    </div>
+
+    <h2>Technical Skills</h2>
+    <div class="skills-grid">
+      <b>Languages</b><span>JavaScript, TypeScript, Dart, PHP, Python, Java, SQL</span>
+      <b>Mobile</b><span>Flutter, Android</span>
+      <b>Frontend</b><span>React, TailwindCSS, HTML5, CSS3, Bootstrap</span>
+      <b>Backend &amp; Cloud</b><span>Laravel, Node.js, REST APIs, Firebase (Auth, Firestore, Cloud Functions, FCM)</span>
+      <b>AI &amp; Automation</b><span>Gemini API, LLM integrations, AI-assisted workflows, web scraping</span>
+      <b>Databases</b><span>MySQL, Firestore</span>
+      <b>CMS &amp; Tools</b><span>WordPress, WooCommerce, Git/GitHub, VS Code, Android Studio, Jira</span>
+    </div>
+
+    <h2>Education &amp; Certification</h2>
+    <div class="edu"><span><b>BE, Information Technology</b> — Anuradha Engineering College, Chikhli (SGBAU, Amravati)</span><span class="muted">2023 · 65%</span></div>
+    <div class="edu"><span><b>Software Testing Certification</b> — Cyber Success, Pune</span><span class="muted">2024</span></div>
+    <div class="edu" style="margin-top:3px"><span><b>Languages:</b> English · Hindi · Marathi</span></div>
+
+  </div>
+</body>
+</html>

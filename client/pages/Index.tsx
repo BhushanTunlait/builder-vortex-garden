@@ -144,8 +144,8 @@ const projects = [
     tags: ["WordPress", "SEO", "E-Commerce"],
   },
   {
-    title: "khushigoyal.site",
-    href: "https://khushigoyal.site",
+    title: "khushigoyal.com",
+    href: "https://khushigoyal.com",
     desc: "Elegant personal portfolio with modern design system, fluid animations, and SEO-friendly architecture.",
     tags: ["Portfolio", "Design", "Performance"],
   },
@@ -368,7 +368,7 @@ function AnimatedCounter({
    from our own origin; re-capture and replace when a project's design changes. */
 const PROJECT_PREVIEWS: Record<string, string> = {
   "https://trimbakeshwarkalsarpdoshpooja.com/": "/projects/trimbakeshwar.webp",
-  "https://khushigoyal.site": "/projects/khushigoyal.webp",
+  "https://khushigoyal.com": "/projects/khushigoyal.webp",
 };
 
 function PreviewImage({ url, alt }: { url: string; alt: string }) {
